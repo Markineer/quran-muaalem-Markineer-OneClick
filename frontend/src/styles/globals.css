@@ -1,0 +1,645 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   QURAN MUAALEM - SACRED NIGHT SKY THEME
+   A luxurious, spiritual interface inspired by
+   Islamic geometric art and celestial beauty
+   ============================================ */
+
+:root {
+  /* Core palette */
+  --night-deepest: #030508;
+  --night-deep: #050a10;
+  --night-base: #0a1423;
+  --night-light: #0f1e35;
+  --night-lighter: #152848;
+
+  /* Sacred gold */
+  --gold-bright: #f5ce4f;
+  --gold-primary: #d4a418;
+  --gold-deep: #a67c12;
+  --gold-glow: rgba(212, 164, 24, 0.15);
+
+  /* Spiritual emerald */
+  --emerald: #10b981;
+
+  /* Error states */
+  --crimson: #ef4444;
+  --amber: #f59e0b;
+
+  /* Typography */
+  --font-arabic: 'Amiri', 'Scheherazade New', serif;
+  --font-display: 'Playfair Display', serif;
+  --font-body: 'Source Sans 3', sans-serif;
+}
+
+/* Base styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--night-deepest);
+  color: rgba(255, 255, 255, 0.9);
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: 1.6;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--night-deep);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--gold-deep);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gold-primary);
+}
+
+/* Selection */
+::selection {
+  background: var(--gold-glow);
+  color: var(--gold-bright);
+}
+
+/* ============================================
+   ARABIC TEXT STYLING
+   ============================================ */
+
+.arabic-text {
+  font-family: var(--font-arabic);
+  direction: rtl;
+  text-align: right;
+  line-height: 2.4;
+  letter-spacing: 0;
+}
+
+.quran-text {
+  font-family: var(--font-arabic);
+  font-size: 2.5rem;
+  line-height: 2.6;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+
+.verse-number {
+  font-family: var(--font-arabic);
+  color: var(--gold-primary);
+  font-size: 0.8em;
+  margin: 0 0.3em;
+  opacity: 0.8;
+}
+
+/* ============================================
+   INK UI - THE CORE VISUAL METAPHOR
+   ============================================ */
+
+/* Inkless state - faint, ghostly outline */
+.ayah-inkless {
+  font-family: var(--font-arabic);
+  font-size: 2rem;
+  line-height: 2.4;
+  color: rgba(255, 255, 255, 0.06);
+  -webkit-text-stroke: 0.5px rgba(255, 255, 255, 0.12);
+  text-shadow: none;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: blur(0.3px);
+}
+
+/* Inked state - full, vibrant, alive */
+.ayah-inked {
+  font-family: var(--font-arabic);
+  font-size: 2.5rem;
+  line-height: 2.6;
+  color: rgba(255, 255, 255, 0.98);
+  -webkit-text-stroke: 0;
+  text-shadow:
+    0 0 40px rgba(212, 164, 24, 0.15),
+    0 4px 20px rgba(0, 0, 0, 0.4);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: blur(0);
+}
+
+/* Ayah row containers */
+.ayah-row {
+  padding: 1.5rem 2rem;
+  margin: 0.75rem 0;
+  border-radius: 16px;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.ayah-row.active {
+  background: linear-gradient(
+    135deg,
+    rgba(212, 164, 24, 0.08) 0%,
+    rgba(15, 30, 53, 0.6) 100%
+  );
+  transform: scale(1.02);
+  border: 1px solid rgba(212, 164, 24, 0.2);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.ayah-row.inactive {
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.ayah-row.inactive:hover {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Verse badge */
+.verse-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  font-family: var(--font-arabic);
+  font-size: 1rem;
+  color: var(--gold-primary);
+  margin-right: 1rem;
+  opacity: 0.7;
+  transition: opacity 0.3s ease;
+}
+
+.ayah-row.active .verse-badge {
+  opacity: 1;
+  color: var(--gold-bright);
+}
+
+/* ============================================
+   ERROR HIGHLIGHTING
+   ============================================ */
+
+.harakat-wrong {
+  background: linear-gradient(
+    180deg,
+    transparent 60%,
+    rgba(239, 68, 68, 0.3) 100%
+  );
+  border-bottom: 3px solid var(--crimson);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin: 0 2px;
+  cursor: help;
+  position: relative;
+  animation: errorPulse 2s ease-in-out infinite;
+}
+
+.harakat-uncertain {
+  background: linear-gradient(
+    180deg,
+    transparent 60%,
+    rgba(245, 158, 11, 0.25) 100%
+  );
+  border-bottom: 3px solid var(--amber);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin: 0 2px;
+  cursor: help;
+}
+
+@keyframes errorPulse {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(239, 68, 68, 0.1); }
+}
+
+/* Tooltip for hints */
+.harakat-wrong::after,
+.harakat-uncertain::after {
+  content: attr(data-hint);
+  position: absolute;
+  bottom: 100%;
+  right: 50%;
+  transform: translateX(50%);
+  background: var(--night-light);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 100;
+  font-family: var(--font-body);
+  direction: rtl;
+}
+
+.harakat-wrong:hover::after,
+.harakat-uncertain:hover::after {
+  opacity: 1;
+  visibility: visible;
+  bottom: calc(100% + 8px);
+}
+
+/* ============================================
+   STATUS INDICATORS
+   ============================================ */
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 50px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+.status-detecting {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--amber);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  animation: pulse 2s infinite;
+}
+
+.status-detected {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--emerald);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-waiting {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.status-error {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--crimson);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* ============================================
+   GEOMETRIC DECORATIONS
+   ============================================ */
+
+.geometric-border {
+  position: relative;
+}
+
+.geometric-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 2px solid transparent;
+  background: linear-gradient(var(--night-base), var(--night-base)) padding-box,
+              linear-gradient(135deg, var(--gold-primary), transparent 50%, var(--gold-deep)) border-box;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.corner-ornament {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--gold-primary);
+  opacity: 0.5;
+}
+
+.corner-ornament.top-right {
+  top: -1px;
+  right: -1px;
+  border-left: none;
+  border-bottom: none;
+}
+
+.corner-ornament.top-left {
+  top: -1px;
+  left: -1px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.corner-ornament.bottom-right {
+  bottom: -1px;
+  right: -1px;
+  border-left: none;
+  border-top: none;
+}
+
+.corner-ornament.bottom-left {
+  bottom: -1px;
+  left: -1px;
+  border-right: none;
+  border-top: none;
+}
+
+/* ============================================
+   AUDIO VISUALIZER
+   ============================================ */
+
+.audio-visualizer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 40px;
+  padding: 0 1rem;
+}
+
+.audio-bar {
+  width: 4px;
+  background: linear-gradient(180deg, var(--gold-bright), var(--gold-deep));
+  border-radius: 2px;
+  transition: height 0.1s ease;
+  animation: audioWave 1s ease-in-out infinite;
+}
+
+.audio-bar:nth-child(1) { animation-delay: 0s; }
+.audio-bar:nth-child(2) { animation-delay: 0.1s; }
+.audio-bar:nth-child(3) { animation-delay: 0.2s; }
+.audio-bar:nth-child(4) { animation-delay: 0.3s; }
+.audio-bar:nth-child(5) { animation-delay: 0.4s; }
+
+@keyframes audioWave {
+  0%, 100% { height: 8px; opacity: 0.5; }
+  50% { height: 32px; opacity: 1; }
+}
+
+.audio-bar.inactive {
+  animation: none;
+  height: 8px;
+  opacity: 0.3;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, var(--gold-primary), var(--gold-deep));
+  color: var(--night-deepest);
+  font-weight: 600;
+  font-size: 1rem;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent, rgba(255,255,255,0.2));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.btn-primary:hover::before {
+  opacity: 1;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(212, 164, 24, 0.3);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
+  font-size: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: white;
+}
+
+.btn-record {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--crimson), #b91c1c);
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.btn-record::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border: 2px solid rgba(239, 68, 68, 0.3);
+  border-radius: 50%;
+  animation: recordPulse 2s ease-out infinite;
+}
+
+.btn-record.recording {
+  animation: recordGlow 1s ease-in-out infinite alternate;
+}
+
+@keyframes recordPulse {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+@keyframes recordGlow {
+  0% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
+  100% { box-shadow: 0 0 40px rgba(239, 68, 68, 0.7); }
+}
+
+/* ============================================
+   CARDS & CONTAINERS
+   ============================================ */
+
+.glass-card {
+  background: linear-gradient(
+    135deg,
+    rgba(15, 30, 53, 0.8) 0%,
+    rgba(10, 20, 35, 0.9) 100%
+  );
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 24px;
+  overflow: hidden;
+  position: relative;
+}
+
+.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(212, 164, 24, 0.3),
+    transparent
+  );
+}
+
+.ink-container {
+  background: var(--night-base);
+  border-radius: 20px;
+  padding: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.ink-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--geometric-pattern);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* ============================================
+   LEGEND
+   ============================================ */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding: 1rem 1.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+}
+
+.legend-dot.correct {
+  background: rgba(16, 185, 129, 0.4);
+  border: 1px solid var(--emerald);
+}
+
+.legend-dot.wrong {
+  background: rgba(239, 68, 68, 0.4);
+  border: 1px solid var(--crimson);
+}
+
+.legend-dot.uncertain {
+  background: rgba(245, 158, 11, 0.4);
+  border: 1px solid var(--amber);
+}
+
+.legend-dot.inkless {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================
+   RESPONSIVE DESIGN
+   ============================================ */
+
+@media (max-width: 768px) {
+  .quran-text {
+    font-size: 1.75rem;
+    line-height: 2.2;
+  }
+
+  .ayah-inked {
+    font-size: 2rem;
+  }
+
+  .ayah-inkless {
+    font-size: 1.5rem;
+  }
+
+  .ayah-row {
+    padding: 1rem 1.25rem;
+  }
+
+  .glass-card {
+    border-radius: 16px;
+  }
+
+  .ink-container {
+    padding: 1.5rem;
+    border-radius: 16px;
+  }
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+.text-gradient-gold {
+  background: linear-gradient(135deg, var(--gold-bright), var(--gold-primary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glow-gold {
+  box-shadow: 0 0 40px var(--gold-glow);
+}
+
+.border-glow {
+  border: 1px solid rgba(212, 164, 24, 0.2);
+  box-shadow:
+    0 0 20px rgba(212, 164, 24, 0.1),
+    inset 0 0 20px rgba(212, 164, 24, 0.05);
+}

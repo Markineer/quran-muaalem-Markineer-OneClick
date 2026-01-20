@@ -1,0 +1,177 @@
+<p align="center">
+  <img src="https://img.shields.io/badge/Arabic-RTL-gold?style=for-the-badge" alt="Arabic RTL"/>
+  <img src="https://img.shields.io/badge/AI-Powered-blue?style=for-the-badge" alt="AI Powered"/>
+  <img src="https://img.shields.io/badge/Quran-Tajweed-green?style=for-the-badge" alt="Quran Tajweed"/>
+</p>
+
+<h1 align="center">
+  📖 المعلم القرآني<br/>
+  <sub>Quran Muaalem</sub>
+</h1>
+
+<p align="center">
+  <strong>AI-Powered Intelligent Quran Recitation Teacher</strong><br/>
+  <em>Detects pronunciation, tajweed, and harakat (diacritics) errors in real-time</em>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10+-blue?logo=python" alt="Python"/>
+  <img src="https://img.shields.io/badge/React-18+-61DAFB?logo=react" alt="React"/>
+  <img src="https://img.shields.io/badge/FastAPI-0.104+-009688?logo=fastapi" alt="FastAPI"/>
+  <img src="https://img.shields.io/badge/PyTorch-2.0+-EE4C2C?logo=pytorch" alt="PyTorch"/>
+</p>
+
+---
+
+## ✨ Features
+
+- 🎤 **Real-Time Analysis** - Live microphone recording with instant feedback
+- 🔍 **Start-Anywhere Detection** - Begin reciting from any ayah, the system auto-detects
+- 📝 **Harakat Training** - Focus specifically on diacritics (فتحة، كسرة، ضمة، سكون)
+- 🎨 **Ink UI** - Beautiful visual metaphor: active ayah is "inked" (clear), others are "inkless" (faint)
+- 🌙 **Sacred Night Sky Theme** - Luxurious dark interface with golden accents
+- 📊 **Detailed Reports** - See exactly which letters have incorrect harakat
+
+## 🚀 Quick Start (Windows)
+
+### One-Click Launch
+
+1. **Download** the project
+2. **Double-click** `run.bat`
+3. **Wait** for automatic setup (first run only)
+4. **Browser opens** automatically at `http://localhost:3000`
+
+That's it! The batch file handles everything:
+- Creates Python virtual environment
+- Installs all dependencies
+- Starts backend and frontend servers
+- Opens your browser
+
+### Requirements
+
+- **Python 3.10+** - [Download](https://python.org)
+- **Node.js 18+** - [Download](https://nodejs.org)
+- **~4GB RAM** for the AI model
+
+## 📁 Project Structure
+
+```
+quran-muaalem/
+├── run.bat                 # 🚀 One-click launcher
+├── frontend/               # React frontend
+│   ├── src/
+│   │   ├── components/     # UI components (InkView, AudioVisualizer)
+│   │   ├── pages/          # Page components
+│   │   └── styles/         # CSS styles
+│   └── package.json
+├── backend/                # FastAPI backend
+│   └── main.py             # API & WebSocket server
+├── src/
+│   └── quran_muaalem/      # Core Python package
+│       ├── inference.py    # Model inference
+│       ├── harakat_mode.py # Harakat analysis
+│       ├── realtime_harakat.py  # Real-time processing
+│       └── ink_render.py   # Ink UI rendering
+├── requirements.txt
+└── pyproject.toml
+```
+
+## 🎯 Usage
+
+### Real-Time Training Mode
+1. Go to **"تدريب مباشر"** (Real-Time Trainer) tab
+2. Click the **microphone button** to start
+3. Begin reciting from **any ayah** of Al-Fatiha
+4. Watch as the system:
+   - Detects which ayah you're reciting
+   - Highlights that ayah (inked)
+   - Shows errors in **red**
+   - Shows uncertain matches in **yellow**
+
+### Upload Mode
+1. Go to **"تدريب الحركات"** (Harakat Trainer) tab
+2. Select an ayah or full Fatiha
+3. Upload your audio recording
+4. Get detailed analysis
+
+## 🎨 The "Ink" Concept
+
+The UI uses an "ink" metaphor:
+
+| State | Appearance | Meaning |
+|-------|-----------|---------|
+| **Inkless** | Faint, ghostly outline | Ayah not being recited |
+| **Inked** | Full, vibrant text | Currently active ayah |
+| **Red highlight** | Error marker | Incorrect harakat |
+| **Yellow highlight** | Uncertain | Low confidence match |
+
+## 🛠️ Manual Setup
+
+If you prefer manual setup:
+
+```bash
+# Clone the repository
+git clone https://github.com/your-repo/quran-muaalem.git
+cd quran-muaalem
+
+# Backend setup
+python -m venv venv
+venv\Scripts\activate  # Windows
+pip install -r requirements.txt
+pip install -e .
+
+# Frontend setup
+cd frontend
+npm install
+
+# Run backend (terminal 1)
+cd backend
+python main.py
+
+# Run frontend (terminal 2)
+cd frontend
+npm run dev
+```
+
+## 🔧 Configuration
+
+### Moshaf Settings
+Navigate to **"الإعدادات"** (Settings) to configure:
+- **Rewaya**: Hafs, Warsh, or Qalun
+- **Madd lengths**: Adjust madd timings (2-6 harakaat)
+
+## 📡 API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Health check |
+| `/api/fatiha` | GET | Get Al-Fatiha ayat |
+| `/api/analyze-harakat` | POST | Analyze audio file |
+| `/ws/realtime` | WebSocket | Real-time audio streaming |
+
+## 🧠 Model
+
+Uses the **Muaalem** model (`obadx/muaalem-model-v3_2`) based on Wav2Vec2-BERT, trained on Quran recitations to detect:
+- Phoneme-level errors
+- Harakat (diacritics) mistakes
+- Tajweed rule violations
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file.
+
+## 🙏 Acknowledgments
+
+- Model by [obadx](https://huggingface.co/obadx)
+- Built with love for the Quran learning community
+
+---
+
+<p align="center">
+  <em>اللهم علّمنا ما ينفعنا وانفعنا بما علّمتنا</em><br/>
+  <sub>O Allah, teach us what benefits us and benefit us from what You taught us</sub>
+</p>
