@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import tempfile
+import time
 import numpy as np
 from pathlib import Path
 from typing import Optional
@@ -38,7 +39,11 @@ from quran_muaalem.realtime_harakat import (
     infer_and_update,
     push_audio,
     get_buffer_duration,
+    get_hint_map_for_active,
+    get_audio_window,
+    score_against_ayah_prefix,
     SAMPLING_RATE,
+    Mode,
 )
 
 # Configure logging
@@ -65,12 +70,60 @@ app.add_middleware(
 muaalem_model = None
 moshaf_settings = None
 
+# Precomputed phonetizer references for each ayah (Fix 2: removes reference bias)
+PHON_REF_BY_AYAH = []
+FAILED_AYAHS = set()  # Track which ayahs failed phonetization
+
+
+def init_phonetizer_refs(settings):
+    """
+    Precompute phonetizer references for ALL ayahs once at startup.
+
+    This eliminates reference bias during detection - we can run inference
+    against all ayah references and pick the best match.
+    """
+    global PHON_REF_BY_AYAH, FAILED_AYAHS
+    from quran_transcript import quran_phonetizer
+
+    PHON_REF_BY_AYAH = []
+    FAILED_AYAHS = set()  # Track which ayahs can't be phonetized
+
+    for i, txt in enumerate(FATIHA_AYAT):
+        try:
+            ref = quran_phonetizer(txt, settings, remove_spaces=True)
+
+            # Validate that ref doesn't contain None values
+            has_none = False
+            if isinstance(ref, dict):
+                for level_name, level_seq in ref.items():
+                    if level_seq is None or (isinstance(level_seq, (list, tuple)) and None in level_seq):
+                        has_none = True
+                        logger.warning(f"Ayah {i} level '{level_name}' contains None, will skip this ayah")
+                        break
+
+            if has_none:
+                PHON_REF_BY_AYAH.append("")
+                FAILED_AYAHS.add(i)
+                logger.warning(f"Ayah {i} phonetizer produced invalid output (contains None)")
+            else:
+                PHON_REF_BY_AYAH.append(ref)
+                logger.info(f"Ayah {i} phonetized OK")
+        except Exception as e:
+            # For ayahs that fail, use empty string (will be skipped in detection)
+            # This is a workaround for a bug in quran_transcript library
+            PHON_REF_BY_AYAH.append("")
+            FAILED_AYAHS.add(i)
+            logger.warning(f"Ayah {i} phonetizer FAILED (will be skipped): {e}")
+
+    logger.info(f"Precomputed {len(PHON_REF_BY_AYAH)} ayah phonetizer references ({len(FAILED_AYAHS)} failed)")
+
 
 def get_model():
     """Lazy load the Muaalem model."""
     global muaalem_model, moshaf_settings
 
-    if muaalem_model is None:
+    # Also check PHON_REF_BY_AYAH - if model loaded but refs failed, we need to retry
+    if muaalem_model is None or len(PHON_REF_BY_AYAH) == 0:
         try:
             import torch
             from quran_muaalem.inference import Muaalem
@@ -79,9 +132,20 @@ def get_model():
             device = "cuda" if torch.cuda.is_available() else "cpu"
             logger.info(f"Loading Muaalem model on {device}...")
 
+            # CPU optimizations
+            if device == "cpu":
+                # Use all available CPU cores
+                num_threads = torch.get_num_threads()
+                logger.info(f"PyTorch using {num_threads} CPU threads")
+                # Use float32 on CPU - bfloat16 emulation is slower
+                dtype = torch.float32
+            else:
+                dtype = torch.bfloat16
+
             muaalem_model = Muaalem(
                 model_name_or_path="obadx/muaalem-model-v3_2",
-                device=device
+                device=device,
+                dtype=dtype
             )
 
             moshaf_settings = MoshafAttributes(
@@ -92,10 +156,15 @@ def get_model():
                 madd_aared_len=4,
             )
 
+            # Precompute phonetizer references for all ayahs (Fix 2)
+            init_phonetizer_refs(moshaf_settings)
+
             logger.info("Model loaded successfully!")
 
         except Exception as e:
+            import traceback
             logger.error(f"Failed to load model: {e}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
             raise HTTPException(status_code=500, detail="Failed to load model")
 
     return muaalem_model, moshaf_settings
@@ -221,11 +290,21 @@ class RealtimeSession:
         self.expected_seqs = get_expected_sequences_for_all_ayat(FATIHA_AYAT)
         self.is_active = False
         self.last_status = "waiting"
+        self.inference_running = False  # Debounce flag to prevent inference queueing
+        self.last_result = None  # Cache last result
+        self.last_infer_start_ts = 0.0  # Track when inference started (for metrics)
+        self.last_infer_done_ts = 0.0  # Track when inference finished (for metrics)
+        self.infer_task = None  # Reference to current inference task
 
     def reset(self):
         self.session = create_session(FATIHA_AYAT)
         self.is_active = False
         self.last_status = "waiting"
+        self.inference_running = False
+        self.last_result = None
+        self.last_infer_start_ts = 0.0
+        self.last_infer_done_ts = 0.0
+        self.infer_task = None
 
 
 @app.websocket("/ws/realtime")
@@ -261,63 +340,212 @@ async def websocket_realtime(websocket: WebSocket):
             audio_int16 = np.frombuffer(data, dtype=np.int16)
             audio_float32 = audio_int16.astype(np.float32) / 32768.0
 
+            # Debug: Log audio stats periodically
+            if not hasattr(session, '_audio_log_count'):
+                session._audio_log_count = 0
+            session._audio_log_count += 1
+            if session._audio_log_count % 50 == 1:  # Log every 50th chunk
+                # Log raw bytes info
+                raw_bytes_len = len(data)
+                int16_max = np.max(np.abs(audio_int16)) if len(audio_int16) > 0 else 0
+                max_val = np.max(np.abs(audio_float32)) if len(audio_float32) > 0 else 0
+                rms_val = np.sqrt(np.mean(audio_float32**2)) if len(audio_float32) > 0 else 0
+                # Show first few int16 samples
+                first5_int16 = list(audio_int16[:5]) if len(audio_int16) >= 5 else list(audio_int16)
+                first5_float = [f"{x:.6f}" for x in audio_float32[:5]] if len(audio_float32) >= 5 else [f"{x:.6f}" for x in audio_float32]
+                logger.info(f"Audio chunk #{session._audio_log_count}: raw_bytes={raw_bytes_len}, int16_max={int16_max}, first5_int16={first5_int16}, first5_float32={first5_float}")
+
             # Push to session buffer
             push_audio(session.session, audio_float32)
 
             # Check if we should run inference
             buffer_duration = get_buffer_duration(session.session)
 
-            if buffer_duration >= 1.0:  # At least 1 second of audio
-                try:
-                    # Run inference and update
-                    result = await asyncio.to_thread(
-                        infer_and_update,
-                        session.session,
-                        lambda audio: run_inference(model, audio, settings),
-                        FATIHA_AYAT,
-                    )
+            if buffer_duration >= 0.5:  # At least 0.5 second of audio (reduced for lower latency)
+                # CRITICAL: Skip if inference is already running to prevent backlog
+                # This is the key fix for the 30+ second delay issue
+                if session.inference_running:
+                    # Log occasionally to show we're skipping
+                    if not hasattr(session, '_skip_count'):
+                        session._skip_count = 0
+                    session._skip_count += 1
+                    if session._skip_count % 50 == 1:
+                        logger.info(f"Skipping inference (already running), skip_count={session._skip_count}")
+                    continue
 
-                    # Send results
-                    if result["status"] == "detected":
-                        await websocket.send_json({
-                            "type": "detection",
-                            "ayah_idx": result["active_ayah_idx"],
-                            "confidence": result["confidence"],
-                        })
+                # Mark inference as running BEFORE creating task
+                session.inference_running = True
+                session.last_infer_start_ts = time.time()
 
-                        # Send tracking info
-                        await websocket.send_json({
-                            "type": "tracking",
-                            "wrong_slots": list(result["wrong_slots"]),
-                            "uncertain_slots": list(result["uncertain_slots"]),
-                            "hints": result["hints"],
-                        })
+                # Create async task for inference (fire-and-forget pattern)
+                # This prevents blocking the audio receive loop
+                async def run_inference_task():
+                    try:
+                        # Get current mode and ayah for inference strategy
+                        current_mode = session.session.mode
+                        current_ayah_idx = session.session.active_ayah_idx
 
-                    elif result["status"] != session.last_status:
-                        await websocket.send_json({
-                            "type": "status",
-                            "status": result["status"],
-                        })
+                        # Run inference with mode-aware strategy
+                        def inference_with_mode_aware_logging(audio):
+                            import time as _time
+                            _start = _time.time()
 
-                    session.last_status = result["status"]
+                            # DISABLED: Multi-ayah detection due to quran_transcript library bug
+                            # The library produces None values in phonetizer output which causes crashes
+                            # Using simple single-ayah mode for all modes
+                            phonemes = run_inference(model, audio, settings, ayah_idx=current_ayah_idx)
+                            _elapsed = _time.time() - _start
+                            logger.info(f"Single-ayah inference took {_elapsed*1000:.0f}ms, "
+                                       f"phonemes: {phonemes[:50] if phonemes else 'EMPTY'}...")
+                            return phonemes
 
-                except Exception as e:
-                    logger.error(f"Inference error: {e}")
+                        inference_start = time.time()
+                        result = await asyncio.to_thread(
+                            infer_and_update,
+                            session.session,
+                            inference_with_mode_aware_logging,
+                            FATIHA_AYAT,
+                        )
+                        total_elapsed = time.time() - inference_start
+
+                        # Log timing metrics to detect backlog
+                        time_since_last = time.time() - session.last_infer_done_ts if session.last_infer_done_ts > 0 else 0
+                        logger.info(f"Inference complete: infer_ms={total_elapsed*1000:.0f}, "
+                                   f"buffer_sec={buffer_duration:.2f}, "
+                                   f"time_since_last={time_since_last*1000:.0f}ms")
+
+                        session.last_result = result  # Cache result
+                        session.last_infer_done_ts = time.time()
+
+                        # Send results based on detection state
+                        is_detecting = result.get("is_detecting", True)
+                        has_speech = result.get("has_speech", False)
+                        best_score = result.get("best_score", 0.0)
+                        detection_confidence = result.get("detection_confidence", 0.0)
+                        active_ayah = result.get("active_ayah_idx")
+
+                        # Enhanced debug logging (Fix 5)
+                        mode_str = result.get("mode", "unknown")
+                        silence_sec = result.get("silence_sec", 0.0)
+                        switch_candidate = result.get("switch_candidate")
+                        switch_streak = result.get("switch_streak", 0)
+                        current_score = result.get("current_score", 0.0)
+
+                        logger.info(f"Detection state: mode={mode_str}, is_detecting={is_detecting}, "
+                                   f"has_speech={has_speech}, best_score={best_score:.3f}, "
+                                   f"current_score={current_score:.3f}, active_ayah={active_ayah}, "
+                                   f"silence_sec={silence_sec:.1f}, switch_candidate={switch_candidate}, "
+                                   f"switch_streak={switch_streak}")
+
+                        # Send WebSocket messages (await each one)
+                        ws_start = time.time()
+
+                        if not is_detecting and result.get("active_ayah_idx") is not None:
+                            # Ayah detected - send detection info with debug fields (Fix 5)
+                            await websocket.send_json({
+                                "type": "detection",
+                                "ayah_idx": result["active_ayah_idx"],
+                                "confidence": result.get("detection_confidence", 0.0),
+                                # Debug fields
+                                "mode": mode_str,
+                                "silence_sec": round(silence_sec, 2),
+                                "best_ayah": result.get("best_ayah"),
+                                "best_score": round(best_score, 3),
+                                "current_score": round(current_score, 3),
+                                "switch_candidate": switch_candidate,
+                                "switch_streak": switch_streak,
+                            })
+
+                            # Get hints for wrong slots
+                            hints = get_hint_map_for_active(session.session, FATIHA_AYAT)
+
+                            # Send tracking info
+                            await websocket.send_json({
+                                "type": "tracking",
+                                "wrong_slots": list(result.get("wrong_slots", set())),
+                                "uncertain_slots": list(result.get("uncertain_slots", set())),
+                                "hints": hints,
+                            })
+
+                            new_status = "detected"
+                        elif has_speech:
+                            new_status = "detecting"
+                        else:
+                            new_status = "waiting"
+
+                        if new_status != session.last_status:
+                            await websocket.send_json({
+                                "type": "status",
+                                "status": new_status,
+                                "mode": mode_str,
+                            })
+
+                        ws_elapsed = time.time() - ws_start
+                        logger.info(f"WebSocket send took {ws_elapsed*1000:.0f}ms")
+
+                        session.last_status = new_status
+
+                    except Exception as e:
+                        logger.error(f"Inference error: {e}")
+                        import traceback
+                        logger.error(traceback.format_exc())
+                    finally:
+                        session.inference_running = False
+
+                # Create and store task reference (don't await, let it run independently)
+                session.infer_task = asyncio.create_task(run_inference_task())
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
-        await websocket.close(code=1011)
+        # Only try to close if the WebSocket is still connected
+        try:
+            await websocket.close(code=1011)
+        except RuntimeError:
+            # WebSocket already closed, ignore
+            pass
 
 
-def run_inference(model, audio, settings):
-    """Run model inference on audio."""
-    from quran_transcript import quran_phonetizer
+def run_inference(model, audio, settings, phon_ref=None, ayah_idx=None):
+    """Run model inference on audio.
 
-    # Use first ayah as reference for phonetizer
-    ayah_text = FATIHA_AYAT[0]
-    phonetizer_out = quran_phonetizer(ayah_text, settings, remove_spaces=True)
+    Args:
+        model: The Muaalem model
+        audio: Audio waveform
+        settings: Moshaf settings
+        phon_ref: Precomputed phonetizer reference (preferred, avoids recomputing)
+        ayah_idx: Index of detected ayah (fallback if phon_ref not provided)
+
+    Returns:
+        Predicted phoneme text
+    """
+    phonetizer_out = None
+
+    # Use precomputed reference if provided (Fix 2)
+    if phon_ref is not None and phon_ref != "":
+        phonetizer_out = phon_ref
+    elif PHON_REF_BY_AYAH and ayah_idx is not None and 0 <= ayah_idx < len(PHON_REF_BY_AYAH):
+        # Use precomputed reference for this ayah (skip if empty/failed)
+        ref = PHON_REF_BY_AYAH[ayah_idx]
+        if ref and ref != "":
+            phonetizer_out = ref
+
+    # If no valid ref yet, find first valid ref
+    if phonetizer_out is None and PHON_REF_BY_AYAH:
+        for ref in PHON_REF_BY_AYAH:
+            if ref and ref != "":
+                phonetizer_out = ref
+                break
+
+    # Fallback: compute on the fly (only if refs not initialized or all failed)
+    if phonetizer_out is None:
+        from quran_transcript import quran_phonetizer
+        if ayah_idx is not None and 0 <= ayah_idx < len(FATIHA_AYAT):
+            ayah_text = FATIHA_AYAT[ayah_idx]
+        else:
+            ayah_text = FATIHA_AYAT[0]
+        phonetizer_out = quran_phonetizer(ayah_text, settings, remove_spaces=True)
 
     # Run model
     outs = model(

@@ -61,11 +61,11 @@ export default function InkView({
           animate={{ opacity: 1 }}
           className="absolute inset-0 flex items-center justify-center pointer-events-none"
         >
-          <div className="text-center px-8 py-6 rounded-2xl bg-night-800/80 backdrop-blur-sm">
-            <p className="text-white/40 font-body">
+          <div className="text-center px-8 py-6 rounded-2xl bg-green-50 border border-green-200 backdrop-blur-sm">
+            <p className="text-gray-800 font-body font-medium">
               اضغط على زر التسجيل وابدأ القراءة
             </p>
-            <p className="text-white/20 text-sm font-body mt-2">
+            <p className="text-gray-600 text-sm font-body mt-2">
               يمكنك البدء من أي آية
             </p>
           </div>
@@ -117,7 +117,7 @@ function AyahRow({ text, ayahNum, isActive, wrongSlots, uncertainSlots, hints })
             animate={{ scaleX: 1, opacity: 1 }}
             exit={{ scaleX: 0, opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="absolute bottom-0 right-0 left-0 h-0.5 bg-gradient-to-l from-gold-500/50 via-gold-400/30 to-transparent origin-right"
+            className="absolute bottom-0 right-0 left-0 h-0.5 bg-gradient-to-l from-green-500/50 via-green-400/30 to-transparent origin-right"
           />
         )}
       </AnimatePresence>

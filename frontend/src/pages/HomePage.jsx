@@ -16,14 +16,14 @@ export default function HomePage() {
       {/* Hero Section */}
       <section className="py-16 md:py-24 text-center relative">
         {/* Decorative elements */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-24 bg-gradient-to-b from-transparent via-gold-500/30 to-transparent" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-24 bg-gradient-to-b from-transparent via-green-500/30 to-transparent" />
 
         <motion.div
           initial={{ y: 30, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.1 }}
         >
-          <span className="inline-block px-4 py-2 rounded-full bg-gold-500/10 border border-gold-500/20 text-gold-400 text-sm font-medium mb-8">
+          <span className="inline-block px-4 py-2 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-sm font-medium mb-8">
             معلم التلاوة الذكي
           </span>
         </motion.div>
@@ -34,7 +34,7 @@ export default function HomePage() {
           transition={{ delay: 0.2 }}
           className="font-display text-5xl md:text-7xl font-bold mb-6"
         >
-          <span className="text-white">تعلّم القراءة</span>
+          <span className="text-gray-900">تعلّم القراءة</span>
           <br />
           <span className="text-gradient-gold">الصحيحة</span>
         </motion.h1>
@@ -43,7 +43,7 @@ export default function HomePage() {
           initial={{ y: 30, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.3 }}
-          className="text-xl text-white/60 max-w-2xl mx-auto mb-12 font-body leading-relaxed"
+          className="text-xl text-gray-900/60 max-w-2xl mx-auto mb-12 font-body leading-relaxed"
         >
           نظام ذكي يستمع لتلاوتك ويكشف أخطاء الحركات والتجويد في الوقت الفعلي،
           ليساعدك على إتقان تلاوة القرآن الكريم
@@ -56,9 +56,9 @@ export default function HomePage() {
           transition={{ delay: 0.4 }}
           className="relative inline-block mb-12"
         >
-          <div className="absolute -inset-4 bg-gradient-to-r from-gold-500/10 via-gold-500/5 to-gold-500/10 rounded-2xl blur-xl" />
+          <div className="absolute -inset-4 bg-gradient-to-r from-green-500/10 via-green-500/5 to-green-500/10 rounded-2xl blur-xl" />
           <div className="relative glass-card px-12 py-8">
-            <p className="font-arabic text-4xl md:text-5xl text-white/90 leading-relaxed">
+            <p className="font-arabic text-4xl md:text-5xl text-gray-900/90 leading-relaxed">
               {FATIHA_PREVIEW}
             </p>
             <div className="corner-ornament top-right" />
@@ -132,16 +132,16 @@ export default function HomePage() {
           whileInView={{ y: 0, opacity: 1 }}
           viewport={{ once: true }}
         >
-          <h2 className="font-display text-3xl text-center text-white mb-4">
+          <h2 className="font-display text-3xl text-center text-gray-900 mb-4">
             كيف يعمل؟
           </h2>
-          <p className="text-center text-white/50 mb-12 max-w-xl mx-auto">
+          <p className="text-center text-gray-900/50 mb-12 max-w-xl mx-auto">
             ثلاث خطوات بسيطة للبدء في تحسين تلاوتك
           </p>
 
           <div className="grid md:grid-cols-3 gap-8 relative">
             {/* Connecting line */}
-            <div className="hidden md:block absolute top-16 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-gold-500/30 to-transparent" />
+            <div className="hidden md:block absolute top-16 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-green-500/30 to-transparent" />
 
             <StepCard
               number="١"
@@ -175,14 +175,14 @@ function FeatureCard({ icon: Icon, title, titleEn, description, gradient, iconCo
       whileInView={{ y: 0, opacity: 1 }}
       viewport={{ once: true }}
       transition={{ delay }}
-      className="glass-card p-8 group hover:border-white/10 transition-all duration-300"
+      className="glass-card p-8 group hover:border-gray-300/10 transition-all duration-300"
     >
       <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
         <Icon className={iconColor} size={24} />
       </div>
-      <h3 className="font-display text-xl text-white mb-2">{title}</h3>
-      <p className="text-xs text-gold-500/60 mb-3 font-body">{titleEn}</p>
-      <p className="text-white/50 font-body leading-relaxed">{description}</p>
+      <h3 className="font-display text-xl text-gray-900 mb-2">{title}</h3>
+      <p className="text-xs text-green-500/60 mb-3 font-body">{titleEn}</p>
+      <p className="text-gray-900/50 font-body leading-relaxed">{description}</p>
     </motion.div>
   )
 }
@@ -196,11 +196,11 @@ function StepCard({ number, title, description, delay }) {
       transition={{ delay }}
       className="text-center relative"
     >
-      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gold-500/20 to-gold-600/20 border border-gold-500/30 flex items-center justify-center mx-auto mb-6 relative z-10">
-        <span className="font-arabic text-3xl text-gold-400">{number}</span>
+      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/30 flex items-center justify-center mx-auto mb-6 relative z-10">
+        <span className="font-arabic text-3xl text-green-400">{number}</span>
       </div>
-      <h3 className="font-display text-lg text-white mb-3">{title}</h3>
-      <p className="text-white/50 text-sm font-body max-w-xs mx-auto">{description}</p>
+      <h3 className="font-display text-lg text-gray-900 mb-3">{title}</h3>
+      <p className="text-gray-900/50 text-sm font-body max-w-xs mx-auto">{description}</p>
     </motion.div>
   )
 }

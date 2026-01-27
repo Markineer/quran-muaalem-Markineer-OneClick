@@ -1,0 +1,17 @@
+LICENSE
+README.md
+pyproject.toml
+src/quran_muaalem/__init__.py
+src/quran_muaalem/decode.py
+src/quran_muaalem/explain.py
+src/quran_muaalem/explain_html.py
+src/quran_muaalem/harakat_mode.py
+src/quran_muaalem/inference.py
+src/quran_muaalem/ink_render.py
+src/quran_muaalem/muaalem_typing.py
+src/quran_muaalem/realtime_harakat.py
+src/quran_muaalem.egg-info/PKG-INFO
+src/quran_muaalem.egg-info/SOURCES.txt
+src/quran_muaalem.egg-info/dependency_links.txt
+src/quran_muaalem.egg-info/requires.txt
+src/quran_muaalem.egg-info/top_level.txt

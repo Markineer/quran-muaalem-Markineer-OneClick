@@ -16,8 +16,22 @@ mistakes in real-time while they recite.
 from dataclasses import dataclass, field
 from collections import deque
 from typing import Callable
+from enum import Enum
 import time
+import logging
 import numpy as np
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# MODE ENUM
+# =============================================================================
+
+class Mode(str, Enum):
+    """Operating mode for the realtime harakat system."""
+    DETECT = "detect"  # Searching for which ayah user is reciting
+    TRACK = "track"    # Locked on an ayah, tracking mistakes
 
 from .harakat_mode import (
     FATIHA_AYAT,
@@ -37,22 +51,34 @@ from .harakat_mode import (
 SAMPLING_RATE = 16000
 
 # Timing settings
-INFER_INTERVAL = 0.8  # Seconds between inference runs
-WINDOW_SEC_DETECT = 6.0  # Audio window for ayah detection
-WINDOW_SEC_TRACK = 4.0  # Audio window for mistake tracking
-RING_BUFFER_SEC = 12.0  # Max audio buffer size
+INFER_INTERVAL = 0.2  # Seconds between inference runs
+WINDOW_SEC_DETECT = 2.2  # Audio window for ayah detection
+WINDOW_SEC_TRACK = 2.5  # Audio window for mistake tracking (more context for tracking)
+RING_BUFFER_SEC = 4.0  # Max audio buffer size (reduced from 6.0 to prevent "old audio drag")
 
 # Detection thresholds
-DETECT_THRESHOLD = 0.62  # Min score to detect ayah
-SWITCH_THRESHOLD = 0.70  # Min score to switch to new ayah
-UNLOCK_THRESHOLD = 0.50  # Score below which to unlock current ayah
+DETECT_THRESHOLD = 0.40  # Min score to detect ayah
+STABILITY_CYCLES = 2  # Consecutive detections before locking
 
-# Stability settings
-STABILITY_CYCLES = 3  # Consecutive detections before locking
-MISMATCH_PERSISTENCE = 2  # Consecutive mismatches to mark as error
+# Switching logic (winner-takes-lead approach)
+SWITCH_MARGIN = 0.08  # New ayah must beat current ayah by this margin to trigger switch (lowered from 0.12)
+SWITCH_STREAK = 2  # Consecutive frames where new ayah wins before switching (lowered from 3)
+MIN_LOCK_TIME_SEC = 1.0  # Minimum time locked before allowing switch (lowered from 1.2)
+
+# Silence handling
+SILENCE_UNLOCK_SEC = 0.8  # After this silence, unlock (back to DETECT mode) (lowered from 1.0)
+SILENCE_FLUSH_SEC = 1.5  # After this silence, clear ring buffer (lowered from 1.8)
+
+# Mismatch persistence
+MISMATCH_PERSISTENCE = 5  # Consecutive mismatches to mark slot as error
+
+# Soft-unlock: If best_score stays below this for LOW_SCORE_UNLOCK_STREAK frames, go back to DETECT
+LOW_SCORE_THRESHOLD = 0.30  # Below this score, consider it "uncertain"
+LOW_SCORE_UNLOCK_STREAK = 5  # N consecutive low-score frames triggers soft-unlock
 
 # VAD settings
-VAD_RMS_THRESHOLD = 0.01  # Minimum RMS energy to consider as speech
+VAD_RMS_THRESHOLD = 0.012  # Minimum RMS energy (increased from 0.007 to reduce noise triggers)
+VAD_WINDOW_MS = 300  # Window size for VAD RMS calculation in milliseconds
 
 
 # =============================================================================
@@ -69,11 +95,24 @@ class RealtimeHarakatSession:
     # Audio buffer
     ring_audio: deque = field(default_factory=lambda: deque(maxlen=int(RING_BUFFER_SEC * SAMPLING_RATE)))
 
+    # Mode state (DETECT or TRACK)
+    mode: Mode = Mode.DETECT
+
     # Detection state
     active_ayah_idx: int | None = None
     lock_active: bool = False
     lock_since_ts: float = 0.0
     detected_history: deque = field(default_factory=lambda: deque(maxlen=STABILITY_CYCLES))
+
+    # Switching state (winner-takes-lead logic)
+    switch_candidate: int | None = None
+    switch_streak: int = 0
+
+    # Soft-unlock state (for prolonged uncertainty)
+    low_score_streak: int = 0  # Consecutive frames with low best_score
+
+    # Voice activity tracking
+    last_voice_ts: float = 0.0
 
     # Tracking state
     cursor: int = 0  # Position in active ayah
@@ -83,7 +122,7 @@ class RealtimeHarakatSession:
 
     # Last inference results
     last_pred_harakat_seq: list = field(default_factory=list)
-    last_score_by_ayah: list = field(default_factory=list)
+    last_score_by_ayah: dict = field(default_factory=dict)  # Changed to dict for scores_by_ayah
     last_update_ts: float = 0.0
 
     # Precomputed references (set during initialization)
@@ -93,6 +132,7 @@ class RealtimeHarakatSession:
     # Session status
     is_detecting: bool = True
     detection_confidence: float = 0.0
+    last_speech_ts: float = 0.0  # Timestamp when speech was last detected (legacy, use last_voice_ts)
 
 
 # =============================================================================
@@ -111,9 +151,8 @@ def push_audio(session: RealtimeHarakatSession, chunk: np.ndarray) -> None:
     if chunk.dtype != np.float32:
         chunk = chunk.astype(np.float32)
 
-    # Add samples to ring buffer
-    for sample in chunk:
-        session.ring_audio.append(sample)
+    # Batch extend is much faster than sample-by-sample append
+    session.ring_audio.extend(chunk.tolist())
 
 
 def get_audio_window(session: RealtimeHarakatSession, seconds: float) -> np.ndarray:
@@ -169,6 +208,9 @@ def is_speech_present(audio: np.ndarray, threshold: float = VAD_RMS_THRESHOLD) -
     """
     Check if speech is present in audio.
 
+    Computes RMS on a smaller recent window (VAD_WINDOW_MS) to avoid being
+    fooled by old audio in the buffer and to detect silence more quickly.
+
     Args:
         audio: Audio samples
         threshold: RMS threshold for speech detection
@@ -176,8 +218,40 @@ def is_speech_present(audio: np.ndarray, threshold: float = VAD_RMS_THRESHOLD) -
     Returns:
         True if speech is likely present
     """
-    rms = compute_rms_energy(audio)
-    return rms > threshold
+    # Use only the last VAD_WINDOW_MS of audio for more responsive silence detection
+    vad_samples = int(VAD_WINDOW_MS * SAMPLING_RATE / 1000)
+    if len(audio) > vad_samples:
+        recent_audio = audio[-vad_samples:]
+    else:
+        recent_audio = audio
+
+    rms = compute_rms_energy(recent_audio)
+
+    # Also compute variation to detect constant noise vs actual speech
+    # Speech has more variation than constant background noise
+    if len(recent_audio) > 100:
+        # Compute RMS of chunks to detect variation
+        chunk_size = len(recent_audio) // 4
+        chunk_rms = [compute_rms_energy(recent_audio[i*chunk_size:(i+1)*chunk_size]) for i in range(4)]
+        rms_variation = max(chunk_rms) - min(chunk_rms)
+    else:
+        rms_variation = 0.0
+
+    # Speech if: RMS above threshold AND some variation (not constant noise)
+    # OR very high RMS (definitely speech even if constant)
+    is_speech = (rms > threshold and rms_variation > threshold * 0.3) or (rms > threshold * 2.0)
+
+    # Log RMS periodically for debugging
+    if hasattr(is_speech_present, '_log_counter'):
+        is_speech_present._log_counter += 1
+    else:
+        is_speech_present._log_counter = 0
+
+    if is_speech_present._log_counter % 10 == 0:  # Log every 10th call
+        logger.info(f"VAD: RMS={rms:.6f}, variation={rms_variation:.6f}, threshold={threshold}, "
+                   f"window_samples={len(recent_audio)}, speech_detected={is_speech}")
+
+    return is_speech
 
 
 # =============================================================================
@@ -225,6 +299,123 @@ def levenshtein_distance(seq1: list, seq2: list) -> int:
                 )
 
     return dp[m][n]
+
+
+# Groups of harakat that are often confused and should be treated as similar
+SIMILAR_HARAKAT_GROUPS = [
+    {'NONE', 'SUKOON'},  # Silent/no vowel often confused
+    {'FATHA', 'FATHATAN'},  # Similar sounds
+    {'KASRA', 'KASRATAN'},
+    {'DAMMA', 'DAMMATAN'},
+]
+
+
+def is_harakat_similar(h1: str, h2: str) -> bool:
+    """
+    Check if two harakat are similar enough to not count as error.
+
+    Args:
+        h1: First harakat class
+        h2: Second harakat class
+
+    Returns:
+        True if they are similar/equivalent
+    """
+    if h1 == h2:
+        return True
+    for group in SIMILAR_HARAKAT_GROUPS:
+        if h1 in group and h2 in group:
+            return True
+    return False
+
+
+def align_sequences(pred: list, exp: list, gap: str = "__GAP__") -> tuple:
+    """
+    Align two sequences using Levenshtein (edit-distance) dynamic programming.
+
+    This properly handles insertions and deletions without causing cascading
+    mismatches. Returns aligned sequences with gap markers where needed.
+
+    Args:
+        pred: Predicted harakat sequence
+        exp: Expected harakat sequence
+        gap: Marker string for gaps in alignment
+
+    Returns:
+        Tuple of (aligned_pred, aligned_exp) where both lists have same length
+    """
+    n, m = len(pred), len(exp)
+
+    # Handle empty sequences
+    if n == 0:
+        return [gap] * m, list(exp)
+    if m == 0:
+        return list(pred), [gap] * n
+
+    # DP tables
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    bt = [[None] * (m + 1) for _ in range(n + 1)]  # backtrack
+
+    # Initialize first row and column
+    for i in range(1, n + 1):
+        dp[i][0] = i
+        bt[i][0] = ("del", i - 1, 0)
+    for j in range(1, m + 1):
+        dp[0][j] = j
+        bt[0][j] = ("ins", 0, j - 1)
+
+    # Fill DP table
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            # Cost is 0 if similar, 1 if different
+            cost = 0 if is_harakat_similar(pred[i - 1], exp[j - 1]) else 1
+
+            sub = dp[i - 1][j - 1] + cost  # substitution/match
+            dele = dp[i - 1][j] + 1  # deletion from pred
+            ins = dp[i][j - 1] + 1  # insertion to pred
+
+            best = min(sub, dele, ins)
+            dp[i][j] = best
+
+            # Track backpointer
+            if best == sub:
+                bt[i][j] = ("sub", i - 1, j - 1)
+            elif best == dele:
+                bt[i][j] = ("del", i - 1, j)
+            else:
+                bt[i][j] = ("ins", i, j - 1)
+
+    # Backtrack to build alignment
+    i, j = n, m
+    aligned_pred = []
+    aligned_exp = []
+
+    while i > 0 or j > 0:
+        step = bt[i][j]
+        if step is None:
+            break
+        if step[0] == "sub":
+            # Match or substitution
+            aligned_pred.append(pred[step[1]])
+            aligned_exp.append(exp[step[2]])
+            i -= 1
+            j -= 1
+        elif step[0] == "del":
+            # Deletion: pred has extra element
+            aligned_pred.append(pred[step[1]])
+            aligned_exp.append(gap)
+            i -= 1
+        else:  # ins
+            # Insertion: exp has extra element
+            aligned_pred.append(gap)
+            aligned_exp.append(exp[step[2]])
+            j -= 1
+
+    # Reverse since we built backwards
+    aligned_pred.reverse()
+    aligned_exp.reverse()
+
+    return aligned_pred, aligned_exp
 
 
 def compute_similarity_score(pred_seq: list, exp_seq: list) -> float:
@@ -369,72 +560,133 @@ def update_detection_state(
     session: RealtimeHarakatSession,
     best_ayah: int | None,
     best_score: float,
+    scores_by_ayah: dict,
 ) -> None:
     """
-    Update detection state with stability/hysteresis logic.
+    Update detection state with winner-takes-lead logic.
+
+    Uses Mode-based state machine:
+    - DETECT mode: Looking for which ayah user is reciting
+    - TRACK mode: Locked on an ayah, tracking mistakes
+
+    Switching logic: If different ayah consistently beats current by SWITCH_MARGIN,
+    switch to that ayah (no need for current score to drop below threshold).
 
     Args:
         session: The realtime session
         best_ayah: Best detected ayah index
         best_score: Score for best ayah
+        scores_by_ayah: Dict mapping ayah index to its score
     """
     now = time.time()
 
-    # If no ayah detected, clear history
-    if best_ayah is None or best_score < DETECT_THRESHOLD:
-        session.detected_history.clear()
-        session.detection_confidence = best_score if best_ayah is not None else 0.0
-        return
+    # Store scores for debugging
+    session.last_score_by_ayah = scores_by_ayah
+    session.detection_confidence = best_score if best_ayah is not None else 0.0
 
-    # Add to history
-    session.detected_history.append(best_ayah)
-    session.detection_confidence = best_score
+    # DETECT MODE: Looking for which ayah user is reciting
+    if session.mode == Mode.DETECT:
+        # If no ayah detected or score too low, clear history
+        if best_ayah is None or best_score < DETECT_THRESHOLD:
+            session.detected_history.clear()
+            return
 
-    # Check if currently locked
-    if session.lock_active:
-        # Check if should unlock (score dropped too low for current ayah)
-        if session.active_ayah_idx is not None:
-            # Calculate score for current locked ayah
-            current_score = 0.0
-            if session.active_ayah_idx in session.expected_harakat_by_ayah:
-                current_score = score_against_ayah_prefix(
-                    session.last_pred_harakat_seq,
-                    session.expected_harakat_by_ayah[session.active_ayah_idx]
-                )
+        # Add to history
+        session.detected_history.append(best_ayah)
 
-            # Unlock if current ayah score is too low AND new ayah is much better
-            if current_score < UNLOCK_THRESHOLD and best_score > SWITCH_THRESHOLD:
-                # Only unlock if different ayah detected consistently
-                if len(session.detected_history) >= STABILITY_CYCLES:
-                    if all(h == best_ayah for h in session.detected_history):
-                        if best_ayah != session.active_ayah_idx:
-                            # Switch to new ayah
-                            session.lock_active = False
-                            session.active_ayah_idx = best_ayah
-                            session.lock_since_ts = now
-                            session.lock_active = True
-                            # Reset tracking state
-                            session.cursor = 0
-                            session.slot_error_counts.clear()
-                            session.wrong_slots.clear()
-                            session.uncertain_slots.clear()
-                            session.is_detecting = False
-    else:
-        # Not locked - try to lock on stable detection
+        # Check if we should lock on this ayah
         if len(session.detected_history) >= STABILITY_CYCLES:
             # Check if all recent detections are the same ayah
             if all(h == best_ayah for h in session.detected_history):
-                if best_score >= DETECT_THRESHOLD:
-                    # Lock on this ayah
-                    session.active_ayah_idx = best_ayah
-                    session.lock_active = True
-                    session.lock_since_ts = now
-                    session.is_detecting = False
-                    # Initialize tracking state
-                    session.cursor = 0
-                    session.slot_error_counts.clear()
-                    session.wrong_slots.clear()
-                    session.uncertain_slots.clear()
+                # Lock on this ayah - transition to TRACK mode
+                logger.info(f"DETECT->TRACK: Locking on ayah {best_ayah} (score={best_score:.3f})")
+                session.mode = Mode.TRACK
+                session.lock_active = True
+                session.active_ayah_idx = best_ayah
+                session.lock_since_ts = now
+                session.is_detecting = False
+                session.switch_candidate = None
+                session.switch_streak = 0
+                # Initialize tracking state
+                session.cursor = 0
+                session.slot_error_counts.clear()
+                session.wrong_slots.clear()
+                session.uncertain_slots.clear()
+        return
+
+    # TRACK MODE: Locked on an ayah, tracking mistakes
+    cur = session.active_ayah_idx
+    if cur is None:
+        # Invalid state - go back to DETECT
+        session.mode = Mode.DETECT
+        return
+
+    # Check minimum lock time
+    time_locked = now - session.lock_since_ts
+    if time_locked < MIN_LOCK_TIME_SEC:
+        # Too early to consider switching
+        return
+
+    # Get current ayah score
+    cur_score = scores_by_ayah.get(cur, 0.0)
+
+    # Soft-unlock: If best_score stays low for too long, go back to DETECT
+    # This handles the case where user switches verse without pause
+    if best_score < LOW_SCORE_THRESHOLD:
+        session.low_score_streak += 1
+        if session.low_score_streak >= LOW_SCORE_UNLOCK_STREAK:
+            logger.info(f"SOFT UNLOCK: best_score={best_score:.3f} < {LOW_SCORE_THRESHOLD} "
+                       f"for {session.low_score_streak} frames, switching to DETECT mode")
+            session.mode = Mode.DETECT
+            session.lock_active = False
+            session.active_ayah_idx = None
+            session.is_detecting = True
+            session.detected_history.clear()
+            session.switch_candidate = None
+            session.switch_streak = 0
+            session.low_score_streak = 0
+            # Reset tracking state
+            session.wrong_slots.clear()
+            session.uncertain_slots.clear()
+            session.slot_error_counts.clear()
+            return
+    else:
+        session.low_score_streak = 0  # Reset streak if score is good
+
+    # Winner-takes-lead: If another ayah beats current by margin, consider switching
+    if best_ayah is not None and best_ayah != cur:
+        margin = best_score - cur_score
+        if margin >= SWITCH_MARGIN and best_score >= 0.45:
+            # This ayah is beating current - track streak
+            if session.switch_candidate == best_ayah:
+                session.switch_streak += 1
+            else:
+                session.switch_candidate = best_ayah
+                session.switch_streak = 1
+
+            logger.info(f"Switch candidate: ayah {best_ayah} (margin={margin:.3f}, streak={session.switch_streak}/{SWITCH_STREAK})")
+
+            # If streak is long enough, switch
+            if session.switch_streak >= SWITCH_STREAK:
+                logger.info(f"SWITCHING: ayah {cur} -> {best_ayah} "
+                           f"(cur_score={cur_score:.3f}, new_score={best_score:.3f})")
+                session.active_ayah_idx = best_ayah
+                session.lock_since_ts = now
+                session.switch_candidate = None
+                session.switch_streak = 0
+                # Reset tracking state for new ayah
+                session.cursor = 0
+                session.slot_error_counts.clear()
+                session.wrong_slots.clear()
+                session.uncertain_slots.clear()
+        else:
+            # Not beating by enough margin - reset streak
+            session.switch_candidate = None
+            session.switch_streak = 0
+    else:
+        # Current ayah is still best - reset streak
+        session.switch_candidate = None
+        session.switch_streak = 0
 
 
 # =============================================================================
@@ -447,9 +699,12 @@ def compare_to_active_ayah(
     ayah_idx: int,
 ) -> set:
     """
-    Compare predicted harakat to active ayah and find mismatches.
+    Compare predicted harakat to active ayah using alignment-based comparison.
 
-    Uses prefix alignment - assumes user started from beginning of ayah.
+    Uses edit-distance DP alignment to handle:
+    1. Timing stretch/compress without cascading errors
+    2. Insertions/deletions without false positives
+    3. Similar harakat groups (FATHA/FATHATAN, etc.)
 
     Args:
         session: The realtime session
@@ -457,20 +712,41 @@ def compare_to_active_ayah(
         ayah_idx: Active ayah index
 
     Returns:
-        Set of slot indices with mismatches
+        Set of slot indices in EXPECTED sequence that have mismatches
     """
     if ayah_idx not in session.expected_harakat_by_ayah:
         return set()
 
     expected = session.expected_harakat_by_ayah[ayah_idx]
+
+    if len(pred_seq) == 0 or len(expected) == 0:
+        return set()
+
+    # Align sequences using DP
+    aligned_pred, aligned_exp = align_sequences(pred_seq, expected)
+
     mismatches = set()
+    exp_pos = -1  # Track position in original expected sequence
 
-    # Compare element by element up to length of predicted
-    compare_len = min(len(pred_seq), len(expected))
+    for p, e in zip(aligned_pred, aligned_exp):
+        # Track position in expected sequence (ignoring gaps)
+        if e != "__GAP__":
+            exp_pos += 1
 
-    for i in range(compare_len):
-        if pred_seq[i] != expected[i]:
-            mismatches.add(i)
+        # Skip gaps in expected (insertions in predicted)
+        if e == "__GAP__":
+            continue  # Don't blame any expected slot for extra predicted elements
+
+        # Handle gaps in predicted (deletions - missing elements)
+        if p == "__GAP__":
+            # Mark as uncertain rather than definitely wrong
+            # The user may not have reached this position yet
+            session.uncertain_slots.add(exp_pos)
+            continue
+
+        # Both have values - check if they match
+        if not is_harakat_similar(p, e):
+            mismatches.add(exp_pos)
 
     return mismatches
 
@@ -541,6 +817,10 @@ def infer_and_update(
     """
     Main update function - run inference and update session state.
 
+    Includes silence-triggered unlock:
+    - After SILENCE_UNLOCK_SEC: Go back to DETECT mode
+    - After SILENCE_FLUSH_SEC: Clear ring buffer
+
     Args:
         session: The realtime session
         run_inference: Callback function that takes audio and returns predicted phonemes
@@ -556,54 +836,97 @@ def infer_and_update(
         ayat = FATIHA_AYAT
 
     # Get appropriate audio window
-    window_sec = WINDOW_SEC_DETECT if session.is_detecting else WINDOW_SEC_TRACK
+    window_sec = WINDOW_SEC_DETECT if session.mode == Mode.DETECT else WINDOW_SEC_TRACK
     audio = get_audio_window(session, window_sec)
 
     # Check VAD
-    if not is_speech_present(audio):
+    vad_is_voice = is_speech_present(audio)
+
+    if vad_is_voice:
+        # Speech detected - update timestamp
+        session.last_voice_ts = now
+        session.last_speech_ts = now  # Legacy field
+    else:
+        # No speech - handle silence
+        silence_duration = now - session.last_voice_ts if session.last_voice_ts > 0 else 0.0
+
+        # Silence-triggered unlock: If tracking and user stopped speaking, unlock quickly
+        if session.mode == Mode.TRACK and silence_duration >= SILENCE_UNLOCK_SEC:
+            logger.info(f"SILENCE UNLOCK: {silence_duration:.2f}s silence, switching to DETECT mode")
+            session.mode = Mode.DETECT
+            session.lock_active = False
+            session.active_ayah_idx = None
+            session.is_detecting = True
+            session.detected_history.clear()
+            session.switch_candidate = None
+            session.switch_streak = 0
+            # Reset tracking state
+            session.wrong_slots.clear()
+            session.uncertain_slots.clear()
+            session.slot_error_counts.clear()
+
+        # If silence is long enough, flush ring buffer (prevents old audio drag)
+        if silence_duration >= SILENCE_FLUSH_SEC:
+            logger.info(f"SILENCE FLUSH: {silence_duration:.2f}s silence, clearing ring buffer")
+            session.ring_audio.clear()
+            session.last_pred_harakat_seq = []
+
         return {
             'active_ayah_idx': session.active_ayah_idx,
-            'is_detecting': session.is_detecting,
+            'is_detecting': session.mode == Mode.DETECT,
             'detection_confidence': session.detection_confidence,
             'wrong_slots': session.wrong_slots.copy(),
             'uncertain_slots': session.uncertain_slots.copy(),
             'has_speech': False,
+            'mode': str(session.mode.value),
+            'silence_sec': round(silence_duration, 2),
         }
 
     # Run inference
     try:
+        logger.info("About to run inference...")
         pred_phonemes = run_inference(audio)
+        logger.info(f"Inference returned phonemes (len={len(pred_phonemes) if pred_phonemes else 0}): {repr(pred_phonemes[:100]) if pred_phonemes else 'EMPTY/NONE'}")
         pred_harakat_seq = extract_harakat_stream(pred_phonemes)
         session.last_pred_harakat_seq = pred_harakat_seq
+        logger.info(f"Extracted harakat seq length: {len(pred_harakat_seq)}, first 10: {pred_harakat_seq[:10] if pred_harakat_seq else 'EMPTY'}")
     except Exception as e:
-        # Inference failed - return current state
+        # Inference failed - log and return current state
+        import traceback
+        logger.error(f"Inference FAILED with error: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return {
             'active_ayah_idx': session.active_ayah_idx,
-            'is_detecting': session.is_detecting,
+            'is_detecting': session.mode == Mode.DETECT,
             'detection_confidence': session.detection_confidence,
             'wrong_slots': session.wrong_slots.copy(),
             'uncertain_slots': session.uncertain_slots.copy(),
             'has_speech': True,
             'error': str(e),
+            'mode': str(session.mode.value),
         }
 
     # Ensure expected harakat is precomputed
     if not session.expected_harakat_by_ayah:
         session.expected_harakat_by_ayah = precompute_expected_harakat(ayat)
 
-    # Run detection
+    # Run detection - get scores for all ayahs
     best_ayah, best_score, all_scores = detect_ayah(
         pred_harakat_seq,
         session.expected_harakat_by_ayah,
         session.active_ayah_idx,
     )
-    session.last_score_by_ayah = all_scores
 
-    # Update detection state
-    update_detection_state(session, best_ayah, best_score)
+    # Build scores_by_ayah dict
+    scores_by_ayah = {}
+    for i, exp_seq in session.expected_harakat_by_ayah.items():
+        scores_by_ayah[i] = score_against_ayah_prefix(pred_harakat_seq, exp_seq)
+
+    # Update detection state with winner-takes-lead logic
+    update_detection_state(session, best_ayah, best_score, scores_by_ayah)
 
     # Run tracking if locked on an ayah
-    if session.lock_active and session.active_ayah_idx is not None:
+    if session.mode == Mode.TRACK and session.active_ayah_idx is not None:
         mismatches = compare_to_active_ayah(
             session,
             pred_harakat_seq,
@@ -616,15 +939,25 @@ def infer_and_update(
         # Update error tracking
         update_slot_errors(session, mismatches, num_slots)
 
+    # Get current ayah score for debugging
+    cur_score = scores_by_ayah.get(session.active_ayah_idx, 0.0) if session.active_ayah_idx is not None else 0.0
+
     return {
         'active_ayah_idx': session.active_ayah_idx,
-        'is_detecting': session.is_detecting,
+        'is_detecting': session.mode == Mode.DETECT,
         'detection_confidence': session.detection_confidence,
         'wrong_slots': session.wrong_slots.copy(),
         'uncertain_slots': session.uncertain_slots.copy(),
         'has_speech': True,
         'pred_harakat_seq': pred_harakat_seq,
         'best_score': best_score,
+        # Debug fields
+        'mode': str(session.mode.value),
+        'best_ayah': best_ayah,
+        'current_score': cur_score,
+        'switch_candidate': session.switch_candidate,
+        'switch_streak': session.switch_streak,
+        'silence_sec': 0.0,
     }
 
 
@@ -660,19 +993,25 @@ def reset_session(session: RealtimeHarakatSession) -> None:
         session: The session to reset
     """
     session.ring_audio.clear()
+    session.mode = Mode.DETECT
     session.active_ayah_idx = None
     session.lock_active = False
     session.lock_since_ts = 0.0
     session.detected_history.clear()
+    session.switch_candidate = None
+    session.switch_streak = 0
+    session.low_score_streak = 0  # Reset soft-unlock streak
+    session.last_voice_ts = 0.0
     session.cursor = 0
     session.slot_error_counts.clear()
     session.wrong_slots.clear()
     session.uncertain_slots.clear()
     session.last_pred_harakat_seq = []
-    session.last_score_by_ayah = []
+    session.last_score_by_ayah = {}
     session.last_update_ts = 0.0
     session.is_detecting = True
     session.detection_confidence = 0.0
+    session.last_speech_ts = 0.0
 
 
 def get_hint_map_for_active(

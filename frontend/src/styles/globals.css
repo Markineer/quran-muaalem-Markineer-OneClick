@@ -3,24 +3,24 @@
 @tailwind utilities;
 
 /* ============================================
-   QURAN MUAALEM - SACRED NIGHT SKY THEME
-   A luxurious, spiritual interface inspired by
-   Islamic geometric art and celestial beauty
+   QURAN MUAALEM - CLEAN WHITE & GREEN THEME
+   A fresh, spiritual interface inspired by
+   Islamic geometric art and natural beauty
    ============================================ */
 
 :root {
-  /* Core palette */
-  --night-deepest: #030508;
-  --night-deep: #050a10;
-  --night-base: #0a1423;
-  --night-light: #0f1e35;
-  --night-lighter: #152848;
+  /* Core palette - Creamy greenish white theme */
+  --bg-primary: #e8f5f0;
+  --bg-secondary: #dff0e9;
+  --bg-tertiary: #d4ebe0;
+  --bg-light: #c9e6d7;
+  --bg-lighter: #bfe0ce;
 
-  /* Sacred gold */
-  --gold-bright: #f5ce4f;
-  --gold-primary: #d4a418;
-  --gold-deep: #a67c12;
-  --gold-glow: rgba(212, 164, 24, 0.15);
+  /* Sacred green accents */
+  --green-bright: #22c55e;
+  --green-primary: #16a34a;
+  --green-deep: #15803d;
+  --green-glow: rgba(22, 163, 74, 0.15);
 
   /* Spiritual emerald */
   --emerald: #10b981;
@@ -48,8 +48,8 @@ html {
 
 body {
   font-family: var(--font-body);
-  background: var(--night-deepest);
-  color: rgba(255, 255, 255, 0.9);
+  background: var(--bg-primary);
+  color: rgba(0, 0, 0, 0.9);
   min-height: 100vh;
   overflow-x: hidden;
   line-height: 1.6;
@@ -61,22 +61,22 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--night-deep);
+  background: var(--bg-light);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--gold-deep);
+  background: var(--green-deep);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--gold-primary);
+  background: var(--green-primary);
 }
 
 /* Selection */
 ::selection {
-  background: var(--gold-glow);
-  color: var(--gold-bright);
+  background: var(--green-glow);
+  color: white;
 }
 
 /* ============================================
@@ -95,16 +95,16 @@ body {
   font-family: var(--font-arabic);
   font-size: 2.5rem;
   line-height: 2.6;
-  color: rgba(255, 255, 255, 0.95);
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  color: rgba(0, 0, 0, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .verse-number {
   font-family: var(--font-arabic);
-  color: var(--gold-primary);
+  color: var(--green-deep);
   font-size: 0.8em;
   margin: 0 0.3em;
-  opacity: 0.8;
+  opacity: 0.7;
 }
 
 /* ============================================
@@ -116,8 +116,8 @@ body {
   font-family: var(--font-arabic);
   font-size: 2rem;
   line-height: 2.4;
-  color: rgba(255, 255, 255, 0.06);
-  -webkit-text-stroke: 0.5px rgba(255, 255, 255, 0.12);
+  color: rgba(0, 0, 0, 0.15);
+  -webkit-text-stroke: 0.5px rgba(0, 0, 0, 0.25);
   text-shadow: none;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   filter: blur(0.3px);
@@ -128,11 +128,11 @@ body {
   font-family: var(--font-arabic);
   font-size: 2.5rem;
   line-height: 2.6;
-  color: rgba(255, 255, 255, 0.98);
+  color: rgba(0, 0, 0, 0.98);
   -webkit-text-stroke: 0;
   text-shadow:
-    0 0 40px rgba(212, 164, 24, 0.15),
-    0 4px 20px rgba(0, 0, 0, 0.4);
+    0 0 20px rgba(22, 163, 74, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.1);
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   filter: blur(0);
 }
@@ -149,14 +149,14 @@ body {
 .ayah-row.active {
   background: linear-gradient(
     135deg,
-    rgba(212, 164, 24, 0.08) 0%,
-    rgba(15, 30, 53, 0.6) 100%
+    rgba(22, 163, 74, 0.08) 0%,
+    rgba(240, 242, 245, 0.8) 100%
   );
   transform: scale(1.02);
-  border: 1px solid rgba(212, 164, 24, 0.2);
+  border: 1px solid rgba(22, 163, 74, 0.3);
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    0 8px 32px rgba(22, 163, 74, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .ayah-row.inactive {
@@ -165,8 +165,8 @@ body {
 }
 
 .ayah-row.inactive:hover {
-  background: rgba(255, 255, 255, 0.02);
-  border-color: rgba(255, 255, 255, 0.05);
+  background: rgba(22, 163, 74, 0.03);
+  border-color: rgba(22, 163, 74, 0.1);
 }
 
 /* Verse badge */
@@ -178,7 +178,7 @@ body {
   height: 2.5rem;
   font-family: var(--font-arabic);
   font-size: 1rem;
-  color: var(--gold-primary);
+  color: var(--green-deep);
   margin-right: 1rem;
   opacity: 0.7;
   transition: opacity 0.3s ease;
@@ -186,7 +186,7 @@ body {
 
 .ayah-row.active .verse-badge {
   opacity: 1;
-  color: var(--gold-bright);
+  color: var(--green-primary);
 }
 
 /* ============================================
@@ -234,8 +234,8 @@ body {
   bottom: 100%;
   right: 50%;
   transform: translateX(50%);
-  background: var(--night-light);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-light);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   padding: 0.5rem 1rem;
   border-radius: 8px;
   font-size: 0.875rem;
@@ -285,9 +285,9 @@ body {
 }
 
 .status-waiting {
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.03);
+  color: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .status-error {
@@ -309,8 +309,8 @@ body {
   position: absolute;
   inset: 0;
   border: 2px solid transparent;
-  background: linear-gradient(var(--night-base), var(--night-base)) padding-box,
-              linear-gradient(135deg, var(--gold-primary), transparent 50%, var(--gold-deep)) border-box;
+  background: linear-gradient(white, white) padding-box,
+              linear-gradient(135deg, var(--green-primary), transparent 50%, var(--green-deep)) border-box;
   border-radius: inherit;
   pointer-events: none;
 }
@@ -319,8 +319,8 @@ body {
   position: absolute;
   width: 24px;
   height: 24px;
-  border: 2px solid var(--gold-primary);
-  opacity: 0.5;
+  border: 2px solid var(--green-primary);
+  opacity: 0.4;
 }
 
 .corner-ornament.top-right {
@@ -366,7 +366,7 @@ body {
 
 .audio-bar {
   width: 4px;
-  background: linear-gradient(180deg, var(--gold-bright), var(--gold-deep));
+  background: linear-gradient(180deg, var(--green-primary), var(--green-deep));
   border-radius: 2px;
   transition: height 0.1s ease;
   animation: audioWave 1s ease-in-out infinite;
@@ -399,8 +399,8 @@ body {
   justify-content: center;
   gap: 0.75rem;
   padding: 1rem 2rem;
-  background: linear-gradient(135deg, var(--gold-primary), var(--gold-deep));
-  color: var(--night-deepest);
+  background: linear-gradient(135deg, var(--green-primary), var(--green-deep));
+  color: white;
   font-weight: 600;
   font-size: 1rem;
   border: none;
@@ -426,7 +426,7 @@ body {
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(212, 164, 24, 0.3);
+  box-shadow: 0 8px 24px rgba(22, 163, 74, 0.3);
 }
 
 .btn-primary:active {
@@ -440,27 +440,27 @@ body {
   gap: 0.75rem;
   padding: 1rem 2rem;
   background: transparent;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(0, 0, 0, 0.7);
   font-weight: 500;
   font-size: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.2);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: white;
+  background: rgba(22, 163, 74, 0.05);
+  border-color: rgba(22, 163, 74, 0.3);
+  color: var(--green-primary);
 }
 
 .btn-record {
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--crimson), #b91c1c);
-  border: 4px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  border: 4px solid rgba(22, 163, 74, 0.2);
   color: white;
   cursor: pointer;
   transition: all 0.3s ease;
@@ -468,13 +468,14 @@ body {
   align-items: center;
   justify-content: center;
   position: relative;
+  box-shadow: 0 4px 20px rgba(34, 197, 94, 0.3);
 }
 
 .btn-record::before {
   content: '';
   position: absolute;
   inset: -8px;
-  border: 2px solid rgba(239, 68, 68, 0.3);
+  border: 2px solid rgba(34, 197, 94, 0.3);
   border-radius: 50%;
   animation: recordPulse 2s ease-out infinite;
 }
@@ -489,8 +490,8 @@ body {
 }
 
 @keyframes recordGlow {
-  0% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); }
-  100% { box-shadow: 0 0 40px rgba(239, 68, 68, 0.7); }
+  0% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.4); }
+  100% { box-shadow: 0 0 40px rgba(34, 197, 94, 0.7); }
 }
 
 /* ============================================
@@ -500,14 +501,15 @@ body {
 .glass-card {
   background: linear-gradient(
     135deg,
-    rgba(15, 30, 53, 0.8) 0%,
-    rgba(10, 20, 35, 0.9) 100%
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(248, 249, 250, 0.98) 100%
   );
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(22, 163, 74, 0.1);
   border-radius: 24px;
   overflow: hidden;
   position: relative;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 }
 
 .glass-card::before {
@@ -520,17 +522,18 @@ body {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(212, 164, 24, 0.3),
+    rgba(22, 163, 74, 0.3),
     transparent
   );
 }
 
 .ink-container {
-  background: var(--night-base);
+  background: white;
   border-radius: 20px;
   padding: 2rem;
   position: relative;
   overflow: hidden;
+  border: 1px solid rgba(22, 163, 74, 0.1);
 }
 
 .ink-container::before {
@@ -551,9 +554,9 @@ body {
   flex-wrap: wrap;
   gap: 1.5rem;
   padding: 1rem 1.5rem;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(248, 249, 250, 0.6);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(22, 163, 74, 0.15);
 }
 
 .legend-item {
@@ -561,7 +564,8 @@ body {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(0, 0, 0, 0.85);
+  font-weight: 500;
 }
 
 .legend-dot {
@@ -587,7 +591,7 @@ body {
 
 .legend-dot.inkless {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.2);
 }
 
 /* ============================================
@@ -627,19 +631,30 @@ body {
    ============================================ */
 
 .text-gradient-gold {
-  background: linear-gradient(135deg, var(--gold-bright), var(--gold-primary));
+  background: linear-gradient(135deg, var(--green-bright), var(--green-primary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-green {
+  background: linear-gradient(135deg, var(--green-bright), var(--green-primary));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .glow-gold {
-  box-shadow: 0 0 40px var(--gold-glow);
+  box-shadow: 0 0 40px var(--green-glow);
+}
+
+.glow-green {
+  box-shadow: 0 0 40px var(--green-glow);
 }
 
 .border-glow {
-  border: 1px solid rgba(212, 164, 24, 0.2);
+  border: 1px solid rgba(22, 163, 74, 0.2);
   box-shadow:
-    0 0 20px rgba(212, 164, 24, 0.1),
-    inset 0 0 20px rgba(212, 164, 24, 0.05);
+    0 0 20px rgba(22, 163, 74, 0.1),
+    inset 0 0 20px rgba(22, 163, 74, 0.05);
 }

@@ -7,23 +7,23 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Deep night sky palette
+        // Clean white background palette
         'night': {
-          950: '#030508',
-          900: '#050a10',
-          800: '#0a1423',
-          700: '#0f1e35',
-          600: '#152848',
+          950: '#ffffff',
+          900: '#f8f9fa',
+          800: '#f0f2f5',
+          700: '#e8ebed',
+          600: '#dfe3e6',
         },
-        // Sacred gold accents
+        // Fresh green accents (replacing gold)
         'gold': {
-          100: '#fef9e7',
-          200: '#fcefc3',
-          300: '#f9e08a',
-          400: '#f5ce4f',
-          500: '#d4a418',
-          600: '#a67c12',
-          700: '#7a5a0d',
+          100: '#f0fdf4',
+          200: '#dcfce7',
+          300: '#86efac',
+          400: '#4ade80',
+          500: '#22c55e',
+          600: '#16a34a',
+          700: '#15803d',
         },
         // Spiritual emerald
         'emerald': {
@@ -49,8 +49,8 @@ export default {
         'body': ['"Source Sans 3"', 'sans-serif'],
       },
       backgroundImage: {
-        'geometric-pattern': `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4a418' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-        'radial-glow': 'radial-gradient(ellipse at center, rgba(212,164,24,0.08) 0%, transparent 70%)',
+        'geometric-pattern': `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2322c55e' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+        'radial-glow': 'radial-gradient(ellipse at center, rgba(34,197,94,0.08) 0%, transparent 70%)',
       },
       animation: {
         'float': 'float 6s ease-in-out infinite',
@@ -73,8 +73,8 @@ export default {
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         glow: {
-          '0%': { boxShadow: '0 0 20px rgba(212,164,24,0.2)' },
-          '100%': { boxShadow: '0 0 40px rgba(212,164,24,0.4)' },
+          '0%': { boxShadow: '0 0 20px rgba(34,197,94,0.2)' },
+          '100%': { boxShadow: '0 0 40px rgba(34,197,94,0.4)' },
         },
       },
     },

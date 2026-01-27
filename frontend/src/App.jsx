@@ -19,13 +19,13 @@ function App() {
 
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-night-950 relative overflow-hidden">
+      <div className="min-h-screen bg-[#e8f5f0] relative overflow-hidden">
         {/* Background effects */}
-        <div className="fixed inset-0 bg-geometric-pattern opacity-30 pointer-events-none" />
+        <div className="fixed inset-0 bg-geometric-pattern opacity-20 pointer-events-none" />
         <div className="fixed inset-0 bg-radial-glow pointer-events-none" />
 
         {/* Ambient glow orbs */}
-        <div className="fixed top-20 right-20 w-96 h-96 bg-gold-500/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="fixed top-20 right-20 w-96 h-96 bg-green-500/5 rounded-full blur-3xl pointer-events-none" />
         <div className="fixed bottom-20 left-20 w-80 h-80 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none" />
 
         {/* Main content */}
@@ -76,22 +76,22 @@ function Header() {
   ]
 
   return (
-    <header className="sticky top-0 z-50 backdrop-blur-xl bg-night-950/80 border-b border-white/5">
+    <header className="sticky top-0 z-50 backdrop-blur-xl bg-white/90 border-b border-gray-200">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <NavLink to="/" className="flex items-center gap-4 group">
             <div className="relative">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center shadow-lg shadow-gold-500/20 group-hover:shadow-gold-500/40 transition-shadow">
-                <span className="font-arabic text-2xl text-night-950 font-bold">ق</span>
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center shadow-lg shadow-green-500/20 group-hover:shadow-green-500/40 transition-shadow">
+                <span className="font-arabic text-2xl text-white font-bold">ق</span>
               </div>
-              <div className="absolute -inset-1 bg-gradient-to-br from-gold-400 to-gold-600 rounded-xl opacity-20 blur group-hover:opacity-40 transition-opacity" />
+              <div className="absolute -inset-1 bg-gradient-to-br from-green-400 to-green-600 rounded-xl opacity-20 blur group-hover:opacity-40 transition-opacity" />
             </div>
             <div className="hidden sm:block">
-              <h1 className="font-display text-xl text-white font-semibold tracking-wide">
+              <h1 className="font-display text-xl text-gray-900 font-semibold tracking-wide">
                 المعلم القرآني
               </h1>
-              <p className="text-xs text-white/40 font-body">Quran Muaalem</p>
+              <p className="text-xs text-gray-900/40 font-body">Quran Muaalem</p>
             </div>
           </NavLink>
 
@@ -104,8 +104,8 @@ function Header() {
                 className={({ isActive }) =>
                   `relative flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 ${
                     isActive
-                      ? 'text-gold-400'
-                      : 'text-white/60 hover:text-white hover:bg-white/5'
+                      ? 'text-green-400'
+                      : 'text-gray-900/60 hover:text-gray-900 hover:bg-gray-100/5'
                   }`
                 }
               >
@@ -118,7 +118,7 @@ function Header() {
                     {isActive && (
                       <motion.div
                         layoutId="activeTab"
-                        className="absolute inset-0 bg-gold-500/10 border border-gold-500/20 rounded-xl -z-10"
+                        className="absolute inset-0 bg-green-500/10 border border-green-500/20 rounded-xl -z-10"
                         transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
                       />
                     )}
@@ -135,14 +135,14 @@ function Header() {
 
 function Footer() {
   return (
-    <footer className="border-t border-white/5 py-8 mt-12">
+    <footer className="border-t border-gray-300/5 py-8 mt-12">
       <div className="container mx-auto px-4 text-center">
-        <p className="text-white/30 text-sm font-body">
+        <p className="text-gray-900/30 text-sm font-body">
           Built with{' '}
-          <span className="text-gold-500">Quran Muaalem</span>
+          <span className="text-green-500">Quran Muaalem</span>
           {' '}| Model: obadx/muaalem-model-v3_2
         </p>
-        <p className="text-white/20 text-xs mt-2 font-arabic">
+        <p className="text-gray-900/20 text-xs mt-2 font-arabic">
           اللهم علّمنا ما ينفعنا وانفعنا بما علّمتنا
         </p>
       </div>

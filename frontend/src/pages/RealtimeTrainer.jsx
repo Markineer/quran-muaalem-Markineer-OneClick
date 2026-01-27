@@ -31,13 +31,16 @@ export default function RealtimeTrainer({ settings }) {
   const audioContextRef = useRef(null)
   const analyserRef = useRef(null)
   const processorRef = useRef(null)
+  const workletNodeRef = useRef(null)
 
   // Start recording
   const startRecording = useCallback(async () => {
+    console.log('startRecording called')
     try {
       setIsConnecting(true)
       setError(null)
 
+      console.log('Requesting microphone access...')
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -47,6 +50,7 @@ export default function RealtimeTrainer({ settings }) {
           noiseSuppression: true,
         }
       })
+      console.log('Microphone access granted, stream:', stream)
 
       mediaStreamRef.current = stream
 
@@ -56,6 +60,14 @@ export default function RealtimeTrainer({ settings }) {
       })
       audioContextRef.current = audioContext
 
+      // Log actual sample rate (browser might not support 16kHz)
+      console.log(`AudioContext created: requested=16000Hz, actual=${audioContext.sampleRate}Hz`)
+
+      // Resume audio context if suspended (required by some browsers)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume()
+      }
+
       const source = audioContext.createMediaStreamSource(stream)
       const analyser = audioContext.createAnalyser()
       analyser.fftSize = 256
@@ -63,23 +75,31 @@ export default function RealtimeTrainer({ settings }) {
       analyserRef.current = analyser
 
       // Connect to WebSocket
-      const ws = new WebSocket(`ws://${window.location.host}/ws/realtime`)
+      // Try direct connection to backend if proxy fails
+      const wsUrl = window.location.port === '3000'
+        ? 'ws://localhost:8000/ws/realtime'  // Dev mode: connect directly to backend
+        : `ws://${window.location.host}/ws/realtime`  // Production: use same host
+      console.log('Connecting to WebSocket:', wsUrl)
+      const ws = new WebSocket(wsUrl)
       wsRef.current = ws
 
-      ws.onopen = () => {
+      ws.onopen = async () => {
+        console.log('WebSocket connected successfully')
         setIsConnecting(false)
         setIsRecording(true)
         setStatus('detecting')
-        startAudioStreaming(stream, ws)
+        await startAudioStreaming(stream, ws)
         startAudioLevelMonitor()
       }
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data)
+        console.log('WebSocket message:', data)
         handleServerMessage(data)
       }
 
-      ws.onerror = () => {
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err)
         setError('خطأ في الاتصال بالخادم')
         stopRecording()
       }
@@ -139,31 +159,118 @@ export default function RealtimeTrainer({ settings }) {
     }, 10000)
   }
 
-  // Start audio streaming to server
-  const startAudioStreaming = (stream, ws) => {
+  // Resample audio from source sample rate to target sample rate (16kHz)
+  const resampleAudio = (inputData, sourceSampleRate, targetSampleRate) => {
+    if (sourceSampleRate === targetSampleRate) {
+      return inputData
+    }
+
+    const ratio = sourceSampleRate / targetSampleRate
+    const outputLength = Math.floor(inputData.length / ratio)
+    const output = new Float32Array(outputLength)
+
+    // Linear interpolation resampling
+    for (let i = 0; i < outputLength; i++) {
+      const srcIndex = i * ratio
+      const srcIndexFloor = Math.floor(srcIndex)
+      const srcIndexCeil = Math.min(srcIndexFloor + 1, inputData.length - 1)
+      const fraction = srcIndex - srcIndexFloor
+
+      output[i] = inputData[srcIndexFloor] * (1 - fraction) + inputData[srcIndexCeil] * fraction
+    }
+
+    return output
+  }
+
+  // Start audio streaming to server using AudioWorklet (with ScriptProcessorNode fallback)
+  const startAudioStreaming = async (stream, ws) => {
     const audioContext = audioContextRef.current
     const source = audioContext.createMediaStreamSource(stream)
 
-    // Create script processor for sending audio chunks
+    // Get actual sample rate - browsers often ignore our 16kHz request
+    const actualSampleRate = audioContext.sampleRate
+    const targetSampleRate = 16000
+    const needsResampling = actualSampleRate !== targetSampleRate
+
+    console.log(`Audio resampling: source=${actualSampleRate}Hz, target=${targetSampleRate}Hz, needsResampling=${needsResampling}`)
+
+    let chunkCount = 0
+
+    // Try AudioWorklet first (lower latency, runs on separate thread)
+    // TEMPORARILY DISABLED - debugging audio issue
+    if (false && audioContext.audioWorklet) {
+      try {
+        await audioContext.audioWorklet.addModule('/audio-processor.js')
+
+        const workletNode = new AudioWorkletNode(audioContext, 'audio-stream-processor')
+        workletNodeRef.current = workletNode
+
+        workletNode.port.onmessage = (event) => {
+          if (event.data.type === 'audio' && ws.readyState === WebSocket.OPEN) {
+            ws.send(event.data.buffer)
+            chunkCount++
+            if (chunkCount % 20 === 0) {
+              console.log(`[AudioWorklet] Sent ${chunkCount} audio chunks`)
+            }
+          }
+        }
+
+        source.connect(workletNode)
+        workletNode.connect(audioContext.destination)
+        console.log('Using AudioWorklet for audio processing (lower latency)')
+        return
+      } catch (err) {
+        console.warn('AudioWorklet not available, falling back to ScriptProcessorNode:', err)
+      }
+    }
+
+    // Fallback to ScriptProcessorNode (deprecated but widely supported)
     const processor = audioContext.createScriptProcessor(4096, 1, 1)
     processorRef.current = processor
 
     processor.onaudioprocess = (event) => {
+      // Log every call to see if processor is being triggered
+      if (!processor._callCount) processor._callCount = 0
+      processor._callCount++
+      if (processor._callCount <= 3) {
+        console.log(`[ScriptProcessor] onaudioprocess called #${processor._callCount}`)
+      }
+
       if (ws.readyState === WebSocket.OPEN) {
-        const inputData = event.inputBuffer.getChannelData(0)
+        let inputData = event.inputBuffer.getChannelData(0)
+
+        // Resample to 16kHz if needed (browsers usually give us 48kHz)
+        if (needsResampling) {
+          inputData = resampleAudio(inputData, actualSampleRate, targetSampleRate)
+        }
+
         const pcmData = new Int16Array(inputData.length)
 
         // Convert float32 to int16
+        let maxVal = 0
         for (let i = 0; i < inputData.length; i++) {
           pcmData[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768))
+          maxVal = Math.max(maxVal, Math.abs(inputData[i]))
         }
 
         ws.send(pcmData.buffer)
+        chunkCount++
+        if (chunkCount % 20 === 0) {
+          // Log audio statistics every 20 chunks
+          let pcmMax = 0
+          for (let i = 0; i < pcmData.length; i++) {
+            pcmMax = Math.max(pcmMax, Math.abs(pcmData[i]))
+          }
+          // Also show first few samples for debugging
+          const samples = Array.from(inputData.slice(0, 5)).map(v => v.toFixed(6))
+          console.log(`[ScriptProcessor] Chunk ${chunkCount}: resampled=${needsResampling}, float32 max=${maxVal.toFixed(6)}, int16 max=${pcmMax}, len=${pcmData.length}`)
+        }
       }
     }
 
     source.connect(processor)
     processor.connect(audioContext.destination)
+    console.log(`Using ScriptProcessorNode for audio processing (resampling ${actualSampleRate}Hz -> ${targetSampleRate}Hz)`)
   }
 
   // Monitor audio level for visualization
@@ -174,7 +281,8 @@ export default function RealtimeTrainer({ settings }) {
     const dataArray = new Uint8Array(analyser.frequencyBinCount)
 
     const updateLevel = () => {
-      if (!isRecording) return
+      // Use ref instead of state to avoid stale closure
+      if (!analyserRef.current) return
 
       analyser.getByteFrequencyData(dataArray)
       const average = dataArray.reduce((a, b) => a + b, 0) / dataArray.length
@@ -229,16 +337,22 @@ export default function RealtimeTrainer({ settings }) {
       mediaStreamRef.current = null
     }
 
+    // Disconnect AudioWorklet node
+    if (workletNodeRef.current) {
+      workletNodeRef.current.disconnect()
+      workletNodeRef.current = null
+    }
+
+    // Disconnect ScriptProcessor (fallback)
+    if (processorRef.current) {
+      processorRef.current.disconnect()
+      processorRef.current = null
+    }
+
     // Close audio context
     if (audioContextRef.current) {
       audioContextRef.current.close()
       audioContextRef.current = null
-    }
-
-    // Disconnect processor
-    if (processorRef.current) {
-      processorRef.current.disconnect()
-      processorRef.current = null
     }
   }, [])
 
@@ -278,10 +392,10 @@ export default function RealtimeTrainer({ settings }) {
           <span>تدريب مباشر</span>
         </motion.div>
 
-        <h1 className="font-display text-4xl text-white mb-4">
+        <h1 className="font-display text-4xl text-gray-900 mb-4">
           التدريب <span className="text-gradient-gold">المباشر</span>
         </h1>
-        <p className="text-white/50 max-w-xl mx-auto">
+        <p className="text-gray-900/50 max-w-xl mx-auto">
           ابدأ القراءة من أي آية — سيتعرف النظام تلقائياً على الآية ويتتبع أخطاء الحركات
         </p>
       </div>
@@ -344,7 +458,7 @@ export default function RealtimeTrainer({ settings }) {
             className="glass-card p-4 mb-8 border-crimson-500/30 text-center"
           >
             <p className="text-crimson-400">{error}</p>
-            <p className="text-white/40 text-sm mt-2">
+            <p className="text-gray-900/40 text-sm mt-2">
               سيتم استخدام الوضع التجريبي
             </p>
           </motion.div>
@@ -386,20 +500,6 @@ export default function RealtimeTrainer({ settings }) {
         </div>
       </motion.div>
 
-      {/* Instructions */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
-        className="mt-8 text-center"
-      >
-        <div className="inline-flex items-center gap-3 px-6 py-4 rounded-2xl bg-blue-500/10 border border-blue-500/20">
-          <Volume2 className="text-blue-400" size={20} />
-          <p className="text-blue-300 text-sm">
-            اضغط على زر التسجيل ثم ابدأ القراءة بصوت واضح
-          </p>
-        </div>
-      </motion.div>
     </motion.div>
   )
 }

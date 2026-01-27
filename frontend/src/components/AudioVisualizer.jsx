@@ -153,7 +153,7 @@ export function CircularVisualizer({ level = 0, isActive = false }) {
           return (
             <motion.div
               key={i}
-              className="absolute bg-gradient-to-t from-gold-600 to-gold-400"
+              className="absolute bg-gradient-to-t from-green-600 to-green-400"
               style={{
                 width: 3,
                 left: '50%',
@@ -174,7 +174,7 @@ export function CircularVisualizer({ level = 0, isActive = false }) {
 
         {/* Center dot */}
         <motion.div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold-500"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-green-500"
           animate={{
             width: isActive ? 8 + level * 4 : 6,
             height: isActive ? 8 + level * 4 : 6,

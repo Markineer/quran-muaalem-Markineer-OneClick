@@ -40,10 +40,10 @@ export default function SettingsPage({ settings, onSettingsChange }) {
     >
       {/* Header */}
       <div className="text-center mb-12">
-        <h1 className="font-display text-4xl text-white mb-4">
+        <h1 className="font-display text-4xl text-gray-900 mb-4">
           <span className="text-gradient-gold">إعدادات</span> المصحف
         </h1>
-        <p className="text-white/50">
+        <p className="text-gray-900/50">
           قم بتعديل خصائص المصحف حسب التلاوة المطلوبة
         </p>
       </div>
@@ -52,12 +52,12 @@ export default function SettingsPage({ settings, onSettingsChange }) {
         {/* Rewaya Selection */}
         <div className="glass-card p-6">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-xl bg-gold-500/20 flex items-center justify-center">
-              <BookOpen className="text-gold-400" size={20} />
+            <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+              <BookOpen className="text-green-400" size={20} />
             </div>
             <div>
-              <h3 className="font-display text-lg text-white">الرواية</h3>
-              <p className="text-white/40 text-sm">اختر رواية التلاوة</p>
+              <h3 className="font-display text-lg text-gray-900">الرواية</h3>
+              <p className="text-gray-900/40 text-sm">اختر رواية التلاوة</p>
             </div>
           </div>
 
@@ -68,8 +68,8 @@ export default function SettingsPage({ settings, onSettingsChange }) {
                 onClick={() => handleChange('rewaya', rewaya)}
                 className={`px-4 py-3 rounded-xl text-center transition-all ${
                   localSettings.rewaya === rewaya
-                    ? 'bg-gold-500/20 border border-gold-500/30 text-gold-400'
-                    : 'bg-white/5 border border-transparent hover:bg-white/10 text-white/70'
+                    ? 'bg-green-500/20 border border-green-500/30 text-green-400'
+                    : 'bg-gray-100/5 border border-transparent hover:bg-gray-100/10 text-gray-900/70'
                 }`}
               >
                 <span className="font-arabic text-lg">
@@ -89,8 +89,8 @@ export default function SettingsPage({ settings, onSettingsChange }) {
               <Sliders className="text-emerald-400" size={20} />
             </div>
             <div>
-              <h3 className="font-display text-lg text-white">أطوال المدود</h3>
-              <p className="text-white/40 text-sm">تحديد أطوال المدود بالحركات</p>
+              <h3 className="font-display text-lg text-gray-900">أطوال المدود</h3>
+              <p className="text-gray-900/40 text-sm">تحديد أطوال المدود بالحركات</p>
             </div>
           </div>
 
@@ -167,12 +167,12 @@ function SliderSetting({ label, labelEn, value, onChange, min, max }) {
     <div>
       <div className="flex items-center justify-between mb-3">
         <div>
-          <span className="text-white font-medium">{label}</span>
-          <span className="text-white/30 text-sm mr-2">({labelEn})</span>
+          <span className="text-gray-900 font-medium">{label}</span>
+          <span className="text-gray-900/30 text-sm mr-2">({labelEn})</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-gold-400 font-arabic text-xl">{toArabic(value)}</span>
-          <span className="text-white/40 text-sm">حركات</span>
+          <span className="text-green-400 font-arabic text-xl">{toArabic(value)}</span>
+          <span className="text-gray-900/40 text-sm">حركات</span>
         </div>
       </div>
 
@@ -183,16 +183,16 @@ function SliderSetting({ label, labelEn, value, onChange, min, max }) {
           max={max}
           value={value}
           onChange={(e) => onChange(parseInt(e.target.value))}
-          className="w-full h-2 bg-white/10 rounded-full appearance-none cursor-pointer
+          className="w-full h-2 bg-gray-100/10 rounded-full appearance-none cursor-pointer
             [&::-webkit-slider-thumb]:appearance-none
             [&::-webkit-slider-thumb]:w-5
             [&::-webkit-slider-thumb]:h-5
             [&::-webkit-slider-thumb]:rounded-full
             [&::-webkit-slider-thumb]:bg-gradient-to-br
-            [&::-webkit-slider-thumb]:from-gold-400
-            [&::-webkit-slider-thumb]:to-gold-600
+            [&::-webkit-slider-thumb]:from-green-400
+            [&::-webkit-slider-thumb]:to-green-600
             [&::-webkit-slider-thumb]:shadow-lg
-            [&::-webkit-slider-thumb]:shadow-gold-500/30
+            [&::-webkit-slider-thumb]:shadow-green-500/30
             [&::-webkit-slider-thumb]:cursor-pointer
             [&::-webkit-slider-thumb]:transition-transform
             [&::-webkit-slider-thumb]:hover:scale-110"
@@ -200,7 +200,7 @@ function SliderSetting({ label, labelEn, value, onChange, min, max }) {
 
         {/* Track fill */}
         <div
-          className="absolute top-0 left-0 h-2 bg-gradient-to-r from-gold-500/50 to-gold-400 rounded-full pointer-events-none"
+          className="absolute top-0 left-0 h-2 bg-gradient-to-r from-green-500/50 to-green-400 rounded-full pointer-events-none"
           style={{ width: `${((value - min) / (max - min)) * 100}%` }}
         />
 
@@ -210,7 +210,7 @@ function SliderSetting({ label, labelEn, value, onChange, min, max }) {
             <span
               key={n}
               className={`text-xs ${
-                n === value ? 'text-gold-400' : 'text-white/30'
+                n === value ? 'text-green-400' : 'text-gray-900/30'
               }`}
             >
               {toArabic(n)}

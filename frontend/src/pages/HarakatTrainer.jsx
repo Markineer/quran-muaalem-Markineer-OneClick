@@ -77,10 +77,10 @@ export default function HarakatTrainer({ settings }) {
     >
       {/* Header */}
       <div className="text-center mb-12">
-        <h1 className="font-display text-4xl text-white mb-4">
+        <h1 className="font-display text-4xl text-gray-900 mb-4">
           تدريب <span className="text-gradient-gold">الحركات</span>
         </h1>
-        <p className="text-white/50 max-w-xl mx-auto">
+        <p className="text-gray-900/50 max-w-xl mx-auto">
           ارفع تسجيلاً صوتياً لتلاوتك واحصل على تحليل مفصّل للحركات
         </p>
       </div>
@@ -90,15 +90,15 @@ export default function HarakatTrainer({ settings }) {
         <div className="space-y-6">
           {/* Ayah Selection */}
           <div className="glass-card p-6">
-            <h3 className="font-display text-lg text-white mb-4">اختر الآية</h3>
+            <h3 className="font-display text-lg text-gray-900 mb-4">اختر الآية</h3>
 
             <div className="space-y-2">
               <button
                 onClick={() => setSelectedAyah(-1)}
                 className={`w-full text-right px-4 py-3 rounded-xl transition-all ${
                   selectedAyah === -1
-                    ? 'bg-gold-500/20 border border-gold-500/30 text-gold-400'
-                    : 'bg-white/5 border border-transparent hover:bg-white/10 text-white/70'
+                    ? 'bg-green-500/20 border border-green-500/30 text-green-400'
+                    : 'bg-gray-100/5 border border-transparent hover:bg-gray-100/10 text-gray-900/70'
                 }`}
               >
                 <span className="font-arabic">كامل سورة الفاتحة</span>
@@ -110,8 +110,8 @@ export default function HarakatTrainer({ settings }) {
                   onClick={() => setSelectedAyah(idx)}
                   className={`w-full text-right px-4 py-3 rounded-xl transition-all ${
                     selectedAyah === idx
-                      ? 'bg-gold-500/20 border border-gold-500/30 text-gold-400'
-                      : 'bg-white/5 border border-transparent hover:bg-white/10 text-white/70'
+                      ? 'bg-green-500/20 border border-green-500/30 text-green-400'
+                      : 'bg-gray-100/5 border border-transparent hover:bg-gray-100/10 text-gray-900/70'
                   }`}
                 >
                   <span className="font-arabic text-sm">{ayah.num}. {ayah.text.slice(0, 40)}...</span>
@@ -122,7 +122,7 @@ export default function HarakatTrainer({ settings }) {
 
           {/* Audio Upload */}
           <div className="glass-card p-6">
-            <h3 className="font-display text-lg text-white mb-4">رفع التسجيل</h3>
+            <h3 className="font-display text-lg text-gray-900 mb-4">رفع التسجيل</h3>
 
             <input
               ref={fileInputRef}
@@ -134,7 +134,7 @@ export default function HarakatTrainer({ settings }) {
 
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-full border-2 border-dashed border-white/10 hover:border-gold-500/30 rounded-2xl p-8 transition-all group"
+              className="w-full border-2 border-dashed border-gray-300/10 hover:border-green-500/30 rounded-2xl p-8 transition-all group"
             >
               <div className="flex flex-col items-center gap-4">
                 {audioFile ? (
@@ -143,20 +143,20 @@ export default function HarakatTrainer({ settings }) {
                       <FileAudio className="text-emerald-400" size={28} />
                     </div>
                     <div className="text-center">
-                      <p className="text-white font-medium">{audioFile.name}</p>
-                      <p className="text-white/40 text-sm">
+                      <p className="text-gray-900 font-medium">{audioFile.name}</p>
+                      <p className="text-gray-900/40 text-sm">
                         {(audioFile.size / 1024 / 1024).toFixed(2)} MB
                       </p>
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="w-16 h-16 rounded-full bg-white/5 group-hover:bg-gold-500/10 flex items-center justify-center transition-colors">
-                      <Upload className="text-white/40 group-hover:text-gold-400" size={28} />
+                    <div className="w-16 h-16 rounded-full bg-gray-100/5 group-hover:bg-green-500/10 flex items-center justify-center transition-colors">
+                      <Upload className="text-gray-900/40 group-hover:text-green-400" size={28} />
                     </div>
                     <div className="text-center">
-                      <p className="text-white/70 group-hover:text-white">اضغط لرفع ملف صوتي</p>
-                      <p className="text-white/40 text-sm">WAV, MP3, M4A, OGG</p>
+                      <p className="text-gray-900/70 group-hover:text-gray-900">اضغط لرفع ملف صوتي</p>
+                      <p className="text-gray-900/40 text-sm">WAV, MP3, M4A, OGG</p>
                     </div>
                   </>
                 )}
@@ -188,9 +188,9 @@ export default function HarakatTrainer({ settings }) {
         <div className="space-y-6">
           {/* Quran Text */}
           <div className="glass-card p-6">
-            <h3 className="font-display text-lg text-white mb-4">النص القرآني</h3>
+            <h3 className="font-display text-lg text-gray-900 mb-4">النص القرآني</h3>
             <div className="ink-container">
-              <p className="font-arabic text-2xl leading-loose text-white/90">
+              <p className="font-arabic text-2xl leading-loose text-gray-900/90">
                 {displayText}
               </p>
             </div>
@@ -216,7 +216,7 @@ export default function HarakatTrainer({ settings }) {
               animate={{ opacity: 1, y: 0 }}
               className="glass-card p-6"
             >
-              <h3 className="font-display text-lg text-white mb-4">نتيجة التحليل</h3>
+              <h3 className="font-display text-lg text-gray-900 mb-4">نتيجة التحليل</h3>
 
               {/* Stats */}
               {results.stats && (
