@@ -1,11 +1,30 @@
 services:
+  # Backend API Service
   - type: web
-    name: quran-muaalem-api
+    name: quran-muaalem-backend
     runtime: python
-    buildCommand: "pip install -r requirements.txt && cd frontend && npm install && npx vite build"
-    startCommand: "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+    rootDir: backend
+    buildCommand: pip install -r ../requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
-        value: "3.11"
-    healthCheckPath: /
-    autoDeploy: true
+        value: 3.11
+    healthCheckPath: /health
+
+  # Frontend Static Site
+  - type: web
+    name: quran-muaalem-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE
+        value: https://quran-muaalem-backend.onrender.com  # Update with your actual backend URL
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
