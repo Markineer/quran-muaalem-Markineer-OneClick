@@ -1,7 +1,7 @@
 services:
-  # ----------------------------
-  # Backend API Service (FastAPI)
-  # ----------------------------
+  # ============================
+  # Backend API (FastAPI)
+  # ============================
   - type: web
     name: quran-muaalem-backend
     runtime: python
@@ -11,13 +11,13 @@ services:
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
-        value: "3.11"
+        value: "3.11.8"
       - key: PYTHONPATH
         value: /opt/render/project/src
 
-  # ----------------------------------------
-  # Frontend Service (Vite build + serve dist)
-  # ----------------------------------------
+  # ============================
+  # Frontend (Vite → serve)
+  # ============================
   - type: web
     name: quran-muaalem-frontend
     runtime: node
