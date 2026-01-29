@@ -12,23 +12,21 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
-      # If you ever get ModuleNotFoundError for imports from /src, keep this:
       - key: PYTHONPATH
         value: /opt/render/project/src
 
-  # ----------------------------
-  # Frontend Static Site (Vite)
-  # ----------------------------
-  - type: static
+  # ----------------------------------------
+  # Frontend Service (Vite build + serve dist)
+  # ----------------------------------------
+  - type: web
     name: quran-muaalem-frontend
+    runtime: node
     rootDir: frontend
     buildCommand: npm ci --include=dev && npm run build
-    staticPublishPath: dist
+    startCommand: npx serve -s dist -l $PORT
     envVars:
-      # Ensure devDependencies (vite) are installed on Render builds
       - key: NPM_CONFIG_PRODUCTION
         value: "false"
-      # Your frontend should read this to call the backend
       - key: VITE_API_BASE
         value: https://quran-muaalem-backend.onrender.com
     headers:
