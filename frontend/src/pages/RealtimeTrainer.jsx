@@ -75,11 +75,12 @@ export default function RealtimeTrainer({ settings }) {
       analyserRef.current = analyser
 
       // Connect to WebSocket
-      // Auto-detect ws/wss based on page protocol (http/https)
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const wsUrl = window.location.port === '3000'
-        ? 'ws://localhost:8000/ws/realtime'  // Dev mode: connect directly to backend
-        : `${protocol}//${window.location.host}/ws/realtime`  // Production: auto-detect protocol
+      // Get backend URL from environment variable
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
+      // Auto-detect ws/wss based on backend protocol
+      const wsProtocol = backendUrl.startsWith('https') ? 'wss:' : 'ws:'
+      const backendHost = backendUrl.replace(/^https?:\/\//, '')
+      const wsUrl = `${wsProtocol}//${backendHost}/ws/realtime`
       console.log('Connecting to WebSocket:', wsUrl)
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
