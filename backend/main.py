@@ -185,6 +185,12 @@ async def root():
     return {"status": "ok", "message": "Quran Muaalem API is running"}
 
 
+@app.get("/health")
+async def health():
+    """Health check endpoint for Render."""
+    return {"status": "ok"}
+
+
 @app.get("/api/fatiha")
 async def get_fatiha():
     """Get Al-Fatiha ayat."""
