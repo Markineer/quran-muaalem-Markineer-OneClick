@@ -7,7 +7,13 @@ services:
     runtime: python
     rootDir: backend
     buildCommand: pip install -r ../requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+    startCommand: >
+      uvicorn main:app
+      --host 0.0.0.0
+      --port $PORT
+      --proxy-headers
+      --forwarded-allow-ips="*"
+      --http h11
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
@@ -16,7 +22,7 @@ services:
         value: /opt/render/project/src
 
   # ============================
-  # Frontend (Vite → serve)
+  # Frontend (Vite + serve)
   # ============================
   - type: web
     name: quran-muaalem-frontend
@@ -27,5 +33,5 @@ services:
     envVars:
       - key: NPM_CONFIG_PRODUCTION
         value: "false"
-      - key: VITE_API_BASE
+      - key: VITE_BACKEND_URL
         value: https://quran-muaalem-backend.onrender.com
