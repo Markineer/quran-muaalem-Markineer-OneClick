@@ -75,10 +75,11 @@ export default function RealtimeTrainer({ settings }) {
       analyserRef.current = analyser
 
       // Connect to WebSocket
-      // Try direct connection to backend if proxy fails
+      // Auto-detect ws/wss based on page protocol (http/https)
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       const wsUrl = window.location.port === '3000'
         ? 'ws://localhost:8000/ws/realtime'  // Dev mode: connect directly to backend
-        : `ws://${window.location.host}/ws/realtime`  // Production: use same host
+        : `${protocol}//${window.location.host}/ws/realtime`  // Production: auto-detect protocol
       console.log('Connecting to WebSocket:', wsUrl)
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
