@@ -19,6 +19,7 @@ services:
       npm run build
 
       echo "===== Copying frontend build to backend ====="
+      rm -rf ../backend/dist
       mkdir -p ../backend/dist
       cp -r dist/* ../backend/dist/
       cd ..
@@ -26,6 +27,8 @@ services:
       echo "===== Build complete ====="
       echo "Frontend files:"
       ls -la backend/dist/
+      echo "Assets:"
+      ls -la backend/dist/assets/ | head -10
 
     startCommand: |
       cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
