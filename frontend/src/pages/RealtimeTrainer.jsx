@@ -26,15 +26,12 @@ export default function RealtimeTrainer({ settings }) {
   const [audioLevel, setAudioLevel] = useState(0)
   const [error, setError] = useState(null)
 
-  const eventSourceRef = useRef(null)
-  const sessionIdRef = useRef(null)
+  const wsRef = useRef(null)
   const mediaStreamRef = useRef(null)
   const audioContextRef = useRef(null)
   const analyserRef = useRef(null)
   const processorRef = useRef(null)
   const workletNodeRef = useRef(null)
-  const audioChunkBufferRef = useRef([])
-  const lastPushTimeRef = useRef(0)
 
   // Start recording
   const startRecording = useCallback(async () => {
@@ -43,85 +40,76 @@ export default function RealtimeTrainer({ settings }) {
       setIsConnecting(true)
       setError(null)
 
-      // Get backend URL from environment variable
-      const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
-      console.log('Backend URL:', backendUrl)
+      // Connect to WebSocket (same origin)
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+      const wsUrl = `${protocol}//${window.location.host}/ws/realtime`
+      console.log('Connecting to WebSocket:', wsUrl)
 
-      // Step 1: Create session
-      console.log('Creating SSE session...')
-      const sessionRes = await fetch(`${backendUrl}/api/realtime/session`, {
-        method: 'POST',
-      })
-      if (!sessionRes.ok) {
-        throw new Error(`Failed to create session: ${sessionRes.status}`)
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+
+      ws.onopen = async () => {
+        console.log('WebSocket connected successfully')
+
+        // Request microphone access
+        console.log('Requesting microphone access...')
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            sampleRate: 16000,
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+          }
+        })
+        console.log('Microphone access granted')
+
+        mediaStreamRef.current = stream
+
+        // Create audio context for visualization
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: 16000
+        })
+        audioContextRef.current = audioContext
+
+        console.log(`AudioContext created: requested=16000Hz, actual=${audioContext.sampleRate}Hz`)
+
+        // Resume audio context if suspended
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume()
+        }
+
+        const source = audioContext.createMediaStreamSource(stream)
+        const analyser = audioContext.createAnalyser()
+        analyser.fftSize = 256
+        source.connect(analyser)
+        analyserRef.current = analyser
+
+        // Start audio streaming
+        setIsConnecting(false)
+        setIsRecording(true)
+        setStatus('detecting')
+        await startAudioStreaming(stream)
+        startAudioLevelMonitor()
       }
-      const { session_id } = await sessionRes.json()
-      sessionIdRef.current = session_id
-      console.log('Session created:', session_id)
 
-      // Step 2: Connect to SSE stream
-      const streamUrl = `${backendUrl}/api/realtime/stream?session_id=${encodeURIComponent(session_id)}`
-      console.log('Connecting to SSE stream:', streamUrl)
-      const eventSource = new EventSource(streamUrl)
-      eventSourceRef.current = eventSource
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data)
+        console.log('WebSocket message:', data)
+        handleServerMessage(data)
+      }
 
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data)
-          console.log('SSE message:', data)
-          handleServerMessage(data)
-        } catch (err) {
-          console.error('Failed to parse SSE message:', err)
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err)
+        setError('خطأ في الاتصال بالخادم')
+        stopRecording()
+      }
+
+      ws.onclose = () => {
+        console.log('WebSocket closed')
+        if (isRecording) {
+          setStatus('waiting')
         }
       }
-
-      eventSource.onerror = (err) => {
-        console.error('SSE error:', err)
-        if (eventSource.readyState === EventSource.CLOSED) {
-          setError('انقطع الاتصال بالخادم')
-          stopRecording()
-        }
-      }
-
-      // Step 3: Request microphone access
-      console.log('Requesting microphone access...')
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-        }
-      })
-      console.log('Microphone access granted')
-
-      mediaStreamRef.current = stream
-
-      // Create audio context for visualization
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: 16000
-      })
-      audioContextRef.current = audioContext
-
-      console.log(`AudioContext created: requested=16000Hz, actual=${audioContext.sampleRate}Hz`)
-
-      // Resume audio context if suspended
-      if (audioContext.state === 'suspended') {
-        await audioContext.resume()
-      }
-
-      const source = audioContext.createMediaStreamSource(stream)
-      const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 256
-      source.connect(analyser)
-      analyserRef.current = analyser
-
-      // Step 4: Start audio streaming
-      setIsConnecting(false)
-      setIsRecording(true)
-      setStatus('detecting')
-      await startAudioStreaming(stream)
-      startAudioLevelMonitor()
 
     } catch (err) {
       console.error('Start recording error:', err)
@@ -129,7 +117,7 @@ export default function RealtimeTrainer({ settings }) {
       if (err.name === 'NotAllowedError') {
         setError('يرجى السماح بالوصول إلى الميكروفون')
       } else {
-        setError('فشل في الاتصال: ' + err.message)
+        setError('فشل في تشغيل الميكروفون')
       }
 
       // Demo mode - simulate detection after 3 seconds
@@ -196,29 +184,7 @@ export default function RealtimeTrainer({ settings }) {
     return output
   }
 
-  // Push audio chunk to server via POST
-  const pushAudioChunk = async (pcmData) => {
-    const sessionId = sessionIdRef.current
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'
-
-    if (!sessionId) {
-      console.warn('No session ID, skipping audio push')
-      return
-    }
-
-    try {
-      const url = `${backendUrl}/api/realtime/push?session_id=${encodeURIComponent(sessionId)}`
-      await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body: pcmData.buffer,
-      })
-    } catch (err) {
-      console.error('Failed to push audio chunk:', err)
-    }
-  }
-
-  // Start audio streaming to server using batched POST requests
+  // Start audio streaming to server via WebSocket
   const startAudioStreaming = async (stream) => {
     const audioContext = audioContextRef.current
     const source = audioContext.createMediaStreamSource(stream)
@@ -231,13 +197,44 @@ export default function RealtimeTrainer({ settings }) {
     console.log(`Audio resampling: source=${actualSampleRate}Hz, target=${targetSampleRate}Hz, needsResampling=${needsResampling}`)
 
     let chunkCount = 0
-    const BATCH_INTERVAL_MS = 250 // Send batched audio every 250ms
 
-    // Fallback to ScriptProcessorNode (widely supported)
+    // Try AudioWorklet first (lower latency, runs on separate thread)
+    // TEMPORARILY DISABLED - debugging audio issue
+    if (false && audioContext.audioWorklet) {
+      try {
+        await audioContext.audioWorklet.addModule('/audio-processor.js')
+
+        const workletNode = new AudioWorkletNode(audioContext, 'audio-stream-processor')
+        workletNodeRef.current = workletNode
+
+        workletNode.port.onmessage = (event) => {
+          const ws = wsRef.current
+          if (event.data.type === 'audio' && ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(event.data.buffer)
+            chunkCount++
+            if (chunkCount % 20 === 0) {
+              console.log(`[AudioWorklet] Sent ${chunkCount} audio chunks`)
+            }
+          }
+        }
+
+        source.connect(workletNode)
+        workletNode.connect(audioContext.destination)
+        console.log('Using AudioWorklet for audio processing (lower latency)')
+        return
+      } catch (err) {
+        console.warn('AudioWorklet not available, falling back to ScriptProcessorNode:', err)
+      }
+    }
+
+    // Fallback to ScriptProcessorNode (deprecated but widely supported)
     const processor = audioContext.createScriptProcessor(4096, 1, 1)
     processorRef.current = processor
 
     processor.onaudioprocess = (event) => {
+      const ws = wsRef.current
+      if (!ws || ws.readyState !== WebSocket.OPEN) return
+
       // Log every call to see if processor is being triggered
       if (!processor._callCount) processor._callCount = 0
       processor._callCount++
@@ -261,40 +258,23 @@ export default function RealtimeTrainer({ settings }) {
         maxVal = Math.max(maxVal, Math.abs(inputData[i]))
       }
 
-      // Add to buffer
-      audioChunkBufferRef.current.push(pcmData)
+      // Send directly via WebSocket
+      ws.send(pcmData.buffer)
 
-      // Send batched chunks every BATCH_INTERVAL_MS
-      const now = Date.now()
-      if (now - lastPushTimeRef.current >= BATCH_INTERVAL_MS) {
-        if (audioChunkBufferRef.current.length > 0) {
-          // Concatenate all buffered chunks
-          const totalLength = audioChunkBufferRef.current.reduce((sum, chunk) => sum + chunk.length, 0)
-          const combined = new Int16Array(totalLength)
-          let offset = 0
-          for (const chunk of audioChunkBufferRef.current) {
-            combined.set(chunk, offset)
-            offset += chunk.length
-          }
-
-          // Send combined chunk
-          pushAudioChunk(combined)
-
-          chunkCount++
-          if (chunkCount % 4 === 0) {
-            console.log(`[SSE] Sent batch #${chunkCount}: ${audioChunkBufferRef.current.length} chunks, ${totalLength} samples`)
-          }
-
-          // Clear buffer
-          audioChunkBufferRef.current = []
-          lastPushTimeRef.current = now
+      chunkCount++
+      if (chunkCount % 20 === 0) {
+        // Log audio statistics every 20 chunks
+        let pcmMax = 0
+        for (let i = 0; i < pcmData.length; i++) {
+          pcmMax = Math.max(pcmMax, Math.abs(pcmData[i]))
         }
+        console.log(`[WebSocket] Chunk ${chunkCount}: resampled=${needsResampling}, float32 max=${maxVal.toFixed(6)}, int16 max=${pcmMax}, len=${pcmData.length}`)
       }
     }
 
     source.connect(processor)
     processor.connect(audioContext.destination)
-    console.log(`Using ScriptProcessorNode with batching (${BATCH_INTERVAL_MS}ms intervals, resampling ${actualSampleRate}Hz -> ${targetSampleRate}Hz)`)
+    console.log(`Using ScriptProcessorNode for audio processing (resampling ${actualSampleRate}Hz -> ${targetSampleRate}Hz)`)
   }
 
   // Monitor audio level for visualization
@@ -349,18 +329,11 @@ export default function RealtimeTrainer({ settings }) {
     setStatus('waiting')
     setAudioLevel(0)
 
-    // Close EventSource (SSE)
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close()
-      eventSourceRef.current = null
+    // Close WebSocket
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
     }
-
-    // Clear session ID
-    sessionIdRef.current = null
-
-    // Clear audio buffer
-    audioChunkBufferRef.current = []
-    lastPushTimeRef.current = 0
 
     // Stop media stream
     if (mediaStreamRef.current) {

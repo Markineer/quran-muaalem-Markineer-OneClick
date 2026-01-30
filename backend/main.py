@@ -12,15 +12,14 @@ import json
 import logging
 import tempfile
 import time
-import uuid
 import numpy as np
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 import uvicorn
 
 # Add parent directory to path for imports
@@ -58,13 +57,13 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# CORS middleware - Required for SSE and POST requests from frontend
+# CORS middleware (only needed for local development)
+# Production doesn't need CORS since frontend is served from same origin
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://quran-muaalem-frontend.onrender.com",
-        "http://localhost:5173",
-        "http://localhost:3000",
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:3000",  # Alternative dev port
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -78,10 +77,6 @@ moshaf_settings = None
 # Precomputed phonetizer references for each ayah (Fix 2: removes reference bias)
 PHON_REF_BY_AYAH = []
 FAILED_AYAHS = set()  # Track which ayahs failed phonetization
-
-# SSE Sessions (for Server-Sent Events alternative to WebSocket)
-SESSIONS: Dict[str, "RealtimeSession"] = {}
-SESSION_QUEUES: Dict[str, asyncio.Queue] = {}
 
 
 def init_phonetizer_refs(settings):
@@ -291,185 +286,6 @@ async def analyze_harakat(
     except Exception as e:
         logger.error(f"Analysis error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-
-# =============================================================================
-# SSE (Server-Sent Events) for Real-Time Streaming
-# =============================================================================
-
-@app.post("/api/realtime/session")
-async def create_realtime_session():
-    """
-    Create a new real-time session for SSE-based audio streaming.
-
-    Returns:
-        session_id: Unique session identifier
-    """
-    session_id = str(uuid.uuid4())
-    SESSIONS[session_id] = RealtimeSession()
-    SESSION_QUEUES[session_id] = asyncio.Queue()
-    logger.info(f"Created SSE session: {session_id}")
-    return {"session_id": session_id}
-
-
-@app.get("/api/realtime/stream")
-async def sse_stream(session_id: str, request: Request):
-    """
-    SSE stream endpoint - server pushes JSON events to client.
-
-    Args:
-        session_id: Session identifier from create_realtime_session
-        request: FastAPI request object (to detect disconnection)
-
-    Returns:
-        StreamingResponse with text/event-stream content
-    """
-    if session_id not in SESSION_QUEUES:
-        raise HTTPException(status_code=404, detail="Unknown session_id")
-
-    queue = SESSION_QUEUES[session_id]
-    logger.info(f"SSE client connected: {session_id}")
-
-    async def event_generator():
-        try:
-            # Send initial connected event
-            yield f"data: {json.dumps({'type': 'status', 'status': 'connected'})}\n\n"
-
-            while True:
-                # Check if client disconnected
-                if await request.is_disconnected():
-                    logger.info(f"SSE client disconnected: {session_id}")
-                    break
-
-                try:
-                    # Wait for message with timeout to check disconnection periodically
-                    msg = await asyncio.wait_for(queue.get(), timeout=1.0)
-                    # Send message as SSE event
-                    yield f"data: {json.dumps(msg)}\n\n"
-                except asyncio.TimeoutError:
-                    # No message, send keepalive comment
-                    yield ": keepalive\n\n"
-                    continue
-
-        except Exception as e:
-            logger.error(f"SSE stream error for {session_id}: {e}")
-        finally:
-            logger.info(f"SSE stream closed for {session_id}")
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Disable nginx buffering
-        },
-    )
-
-
-@app.post("/api/realtime/push")
-async def push_audio_chunk(session_id: str, request: Request):
-    """
-    Receive audio chunk from client and process it.
-
-    Args:
-        session_id: Session identifier
-        request: FastAPI request with raw PCM audio bytes in body
-
-    Returns:
-        {"ok": True} on success
-    """
-    if session_id not in SESSIONS or session_id not in SESSION_QUEUES:
-        raise HTTPException(status_code=404, detail="Unknown session_id")
-
-    session = SESSIONS[session_id]
-    queue = SESSION_QUEUES[session_id]
-
-    # Lazy-load model
-    model, settings = get_model()
-
-    # Read raw audio bytes
-    data = await request.body()
-    if not data:
-        return {"ok": True}
-
-    # Convert from Int16 to float32
-    audio_int16 = np.frombuffer(data, dtype=np.int16)
-    audio_float32 = audio_int16.astype(np.float32) / 32768.0
-
-    # Debug logging (periodically)
-    if not hasattr(session, '_audio_log_count'):
-        session._audio_log_count = 0
-    session._audio_log_count += 1
-    if session._audio_log_count % 10 == 1:  # Log every 10th chunk
-        max_val = np.max(np.abs(audio_float32)) if len(audio_float32) > 0 else 0
-        logger.info(f"[SSE {session_id[:8]}] Audio chunk #{session._audio_log_count}: len={len(audio_int16)}, max={max_val:.4f}")
-
-    # Push audio to session buffer
-    push_audio(session.session, audio_float32)
-
-    # Check if we should run inference
-    buffer_duration = get_buffer_duration(session.session)
-
-    # Run inference only if enough audio and not already running
-    if buffer_duration >= 0.5 and not session.inference_running:
-        session.inference_running = True
-
-        async def run_inference_and_publish():
-            try:
-                current_ayah_idx = session.session.active_ayah_idx
-
-                # Run inference
-                def inference_fn(audio):
-                    return run_inference(model, audio, settings, ayah_idx=current_ayah_idx)
-
-                result = await asyncio.to_thread(
-                    infer_and_update,
-                    session.session,
-                    inference_fn,
-                    FATIHA_AYAT,
-                )
-
-                # Publish events through SSE queue (shape matches frontend expectations)
-                is_detecting = result.get("is_detecting", True)
-
-                if not is_detecting and result.get("active_ayah_idx") is not None:
-                    # Ayah detected
-                    await queue.put({
-                        "type": "detection",
-                        "ayah_idx": result["active_ayah_idx"],
-                        "confidence": result.get("detection_confidence", 0.0),
-                        "mode": result.get("mode", "unknown"),
-                    })
-
-                    # Get hints
-                    hints = get_hint_map_for_active(session.session, FATIHA_AYAT)
-
-                    # Tracking info
-                    await queue.put({
-                        "type": "tracking",
-                        "wrong_slots": list(result.get("wrong_slots", set())),
-                        "uncertain_slots": list(result.get("uncertain_slots", set())),
-                        "hints": hints,
-                    })
-                else:
-                    # Still detecting or waiting
-                    await queue.put({
-                        "type": "status",
-                        "status": "detecting" if result.get("has_speech", False) else "waiting",
-                        "mode": result.get("mode", "unknown"),
-                    })
-
-            except Exception as e:
-                logger.error(f"Inference error in SSE session {session_id[:8]}: {e}")
-                await queue.put({"type": "error", "message": str(e)})
-            finally:
-                session.inference_running = False
-
-        # Fire and forget
-        asyncio.create_task(run_inference_and_publish())
-
-    return {"ok": True}
 
 
 # =============================================================================
@@ -755,18 +571,29 @@ def run_inference(model, audio, settings, phon_ref=None, ayah_idx=None):
 # Static Files (Serve Frontend)
 # =============================================================================
 
-# Serve frontend build
-frontend_path = Path(__file__).parent.parent / "frontend" / "dist"
-if frontend_path.exists():
-    app.mount("/assets", StaticFiles(directory=frontend_path / "assets"), name="assets")
+# Serve frontend build (copied to backend/dist during build)
+FRONTEND_DIR = Path(__file__).parent / "dist"
+
+if FRONTEND_DIR.exists():
+    logger.info(f"Serving frontend from: {FRONTEND_DIR}")
+    # Serve static assets (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
 
     @app.get("/{full_path:path}")
     async def serve_frontend(full_path: str):
-        """Serve frontend files."""
-        file_path = frontend_path / full_path
+        """
+        Serve frontend files. Return index.html for SPA routes.
+        """
+        # Try to serve specific file
+        file_path = FRONTEND_DIR / full_path
         if file_path.exists() and file_path.is_file():
             return FileResponse(file_path)
-        return FileResponse(frontend_path / "index.html")
+
+        # Fallback to index.html for SPA routing
+        return FileResponse(FRONTEND_DIR / "index.html")
+else:
+    logger.warning(f"Frontend directory not found: {FRONTEND_DIR}")
+    logger.warning("Frontend will not be served. Build frontend and copy to backend/dist/")
 
 
 # =============================================================================

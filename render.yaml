@@ -1,37 +1,41 @@
 services:
-  # ============================
-  # Backend API (FastAPI)
-  # ============================
+  # ----------------------------
+  # Single Service: Backend + Frontend
+  # ----------------------------
   - type: web
-    name: quran-muaalem-backend
+    name: quran-muaalem
     runtime: python
-    rootDir: backend
-    buildCommand: pip install -r ../requirements.txt
-    startCommand: >
-      uvicorn main:app
-      --host 0.0.0.0
-      --port $PORT
-      --proxy-headers
-      --forwarded-allow-ips="*"
-      --http h11
+    plan: starter
+    region: oregon
+
+    buildCommand: |
+      echo "===== Installing Python dependencies ====="
+      pip install --upgrade pip
+      pip install -r requirements.txt
+
+      echo "===== Building frontend ====="
+      cd frontend
+      npm ci --include=dev
+      npm run build
+
+      echo "===== Copying frontend build to backend ====="
+      mkdir -p ../backend/dist
+      cp -r dist/* ../backend/dist/
+      cd ..
+
+      echo "===== Build complete ====="
+      echo "Frontend files:"
+      ls -la backend/dist/
+
+    startCommand: |
+      cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*"
+
     healthCheckPath: /health
+
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.8"
       - key: PYTHONPATH
         value: /opt/render/project/src
-
-  # ============================
-  # Frontend (Vite + serve)
-  # ============================
-  - type: web
-    name: quran-muaalem-frontend
-    runtime: node
-    rootDir: frontend
-    buildCommand: npm ci --include=dev && npm run build
-    startCommand: npx serve -s dist -l $PORT
-    envVars:
-      - key: NPM_CONFIG_PRODUCTION
-        value: "false"
-      - key: VITE_BACKEND_URL
-        value: https://quran-muaalem-backend.onrender.com
+      - key: NODE_ENV
+        value: production
