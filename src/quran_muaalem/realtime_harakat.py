@@ -52,7 +52,7 @@ SAMPLING_RATE = 16000
 
 # Timing settings
 INFER_INTERVAL = 0.2  # Seconds between inference runs
-WINDOW_SEC_DETECT = 2.2  # Audio window for ayah detection
+WINDOW_SEC_DETECT = 1.5  # Audio window for ayah detection (reduced from 2.2 for faster response)
 WINDOW_SEC_TRACK = 2.5  # Audio window for mistake tracking (more context for tracking)
 RING_BUFFER_SEC = 4.0  # Max audio buffer size (reduced from 6.0 to prevent "old audio drag")
 

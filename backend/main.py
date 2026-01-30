@@ -371,7 +371,7 @@ async def websocket_realtime(websocket: WebSocket):
             # Check if we should run inference
             buffer_duration = get_buffer_duration(session.session)
 
-            if buffer_duration >= 0.5:  # At least 0.5 second of audio (reduced for lower latency)
+            if buffer_duration >= 0.3:  # At least 0.3 second of audio (reduced from 0.5 for faster response)
                 # CRITICAL: Skip if inference is already running to prevent backlog
                 # This is the key fix for the 30+ second delay issue
                 if session.inference_running:
