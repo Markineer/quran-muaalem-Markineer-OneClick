@@ -307,12 +307,6 @@ export default function RealtimeTrainer({ settings }) {
         if (data.confidence !== undefined) {
           setConfidence(data.confidence)
         }
-        // Check for loading message
-        if (data.message && data.message.includes('Loading')) {
-          setLoadingMessage(data.message)
-        } else {
-          setLoadingMessage(null)
-        }
         break
 
       case 'detection':
