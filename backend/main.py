@@ -178,16 +178,16 @@ def get_model():
 # REST API Endpoints
 # =============================================================================
 
-@app.get("/")
-async def root():
-    """Health check endpoint."""
-    return {"status": "ok", "message": "Quran Muaalem API is running"}
-
-
 @app.get("/health")
 async def health():
     """Health check endpoint for Render."""
-    return {"status": "ok"}
+    return {"ok": True}
+
+
+@app.get("/api/health")
+async def api_health():
+    """API health check."""
+    return {"status": "ok", "message": "Quran Muaalem API is running"}
 
 
 @app.get("/api/fatiha")
