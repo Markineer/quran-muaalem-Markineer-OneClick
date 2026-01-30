@@ -77,7 +77,7 @@ LOW_SCORE_THRESHOLD = 0.30  # Below this score, consider it "uncertain"
 LOW_SCORE_UNLOCK_STREAK = 5  # N consecutive low-score frames triggers soft-unlock
 
 # VAD settings
-VAD_RMS_THRESHOLD = 0.012  # Minimum RMS energy (increased from 0.007 to reduce noise triggers)
+VAD_RMS_THRESHOLD = 0.004  # Minimum RMS energy (lowered to 0.004 to work with quieter microphones)
 VAD_WINDOW_MS = 300  # Window size for VAD RMS calculation in milliseconds
 
 
