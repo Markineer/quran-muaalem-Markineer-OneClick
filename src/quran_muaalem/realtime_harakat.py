@@ -52,13 +52,13 @@ SAMPLING_RATE = 16000
 
 # Timing settings
 INFER_INTERVAL = 0.2  # Seconds between inference runs
-WINDOW_SEC_DETECT = 1.5  # Audio window for ayah detection (reduced from 2.2 for faster response)
+WINDOW_SEC_DETECT = 2.5  # Audio window for ayah detection (needs enough context for reliable matching)
 WINDOW_SEC_TRACK = 2.5  # Audio window for mistake tracking (more context for tracking)
 RING_BUFFER_SEC = 4.0  # Max audio buffer size (reduced from 6.0 to prevent "old audio drag")
 
 # Detection thresholds
-DETECT_THRESHOLD = 0.40  # Min score to detect ayah
-STABILITY_CYCLES = 2  # Consecutive detections before locking
+DETECT_THRESHOLD = 0.35  # Min score to detect ayah (lowered to 0.35 for easier detection)
+STABILITY_CYCLES = 1  # Consecutive detections before locking (reduced to 1 for immediate lock)
 
 # Switching logic (winner-takes-lead approach)
 SWITCH_MARGIN = 0.08  # New ayah must beat current ayah by this margin to trigger switch (lowered from 0.12)
