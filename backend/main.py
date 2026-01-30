@@ -175,6 +175,29 @@ def get_model():
 
 
 # =============================================================================
+# Application Lifecycle Events
+# =============================================================================
+
+@app.on_event("startup")
+async def startup_event():
+    """Pre-load model on application startup to avoid first-request timeout."""
+    logger.info("=" * 60)
+    logger.info("Starting application - pre-loading Muaalem model...")
+    logger.info("=" * 60)
+    try:
+        # This will load the model during startup
+        get_model()
+        logger.info("=" * 60)
+        logger.info("Model pre-loaded successfully! Ready to accept requests.")
+        logger.info("=" * 60)
+    except Exception as e:
+        logger.error("=" * 60)
+        logger.error(f"FATAL: Failed to pre-load model during startup: {e}")
+        logger.error("=" * 60)
+        # Don't raise - let the app start anyway and retry on first request
+
+
+# =============================================================================
 # REST API Endpoints
 # =============================================================================
 
