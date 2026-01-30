@@ -483,12 +483,16 @@ async def websocket_realtime(websocket: WebSocket):
                         else:
                             new_status = "waiting"
 
-                        if new_status != session.last_status:
-                            await websocket.send_json({
-                                "type": "status",
-                                "status": new_status,
-                                "mode": mode_str,
-                            })
+                        # Always send status with detection confidence for debugging
+                        await websocket.send_json({
+                            "type": "status",
+                            "status": new_status,
+                            "mode": mode_str,
+                            "confidence": round(detection_confidence, 3),
+                            "best_score": round(best_score, 3),
+                            "best_ayah": result.get("best_ayah"),
+                            "has_speech": has_speech,
+                        })
 
                         ws_elapsed = time.time() - ws_start
                         logger.info(f"WebSocket send took {ws_elapsed*1000:.0f}ms")

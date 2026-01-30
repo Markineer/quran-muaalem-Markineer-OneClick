@@ -303,6 +303,16 @@ export default function RealtimeTrainer({ settings }) {
     switch (data.type) {
       case 'status':
         setStatus(data.status)
+        // Update confidence even in detecting mode for progress display
+        if (data.confidence !== undefined) {
+          setConfidence(data.confidence)
+        }
+        // Check for loading message
+        if (data.message && data.message.includes('Loading')) {
+          setLoadingMessage(data.message)
+        } else {
+          setLoadingMessage(null)
+        }
         break
 
       case 'detection':
@@ -516,7 +526,7 @@ function StatusPill({ status, ayahIdx, confidence }) {
       className: 'status-waiting',
     },
     detecting: {
-      text: 'جاري التعرف على الآية...',
+      text: confidence > 0 ? `جاري التعرف... (${Math.round(confidence * 100)}%)` : 'جاري التعرف على الآية...',
       icon: '⏳',
       className: 'status-detecting',
     },
