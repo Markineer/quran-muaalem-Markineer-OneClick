@@ -70,15 +70,15 @@ SILENCE_UNLOCK_SEC = 0.8  # After this silence, unlock (back to DETECT mode) (lo
 SILENCE_FLUSH_SEC = 1.5  # After this silence, clear ring buffer (lowered from 1.8)
 
 # Mismatch persistence
-MISMATCH_PERSISTENCE = 5  # Consecutive mismatches to mark slot as error
+MISMATCH_PERSISTENCE = 2  # Consecutive mismatches to mark slot as error (lowered for faster feedback)
 
 # Soft-unlock: If best_score stays below this for LOW_SCORE_UNLOCK_STREAK frames, go back to DETECT
 LOW_SCORE_THRESHOLD = 0.30  # Below this score, consider it "uncertain"
 LOW_SCORE_UNLOCK_STREAK = 5  # N consecutive low-score frames triggers soft-unlock
 
 # VAD settings
-VAD_RMS_THRESHOLD = 0.004  # Minimum RMS energy (lowered to 0.004 to work with quieter microphones)
-VAD_WINDOW_MS = 300  # Window size for VAD RMS calculation in milliseconds
+VAD_RMS_THRESHOLD = 0.002  # Minimum RMS energy (lowered further for very quiet microphones)
+VAD_WINDOW_MS = 100  # Window size for VAD RMS calculation (lowered for faster response)
 
 
 # =============================================================================
@@ -117,7 +117,9 @@ class RealtimeHarakatSession:
     # Tracking state
     cursor: int = 0  # Position in active ayah
     slot_error_counts: dict = field(default_factory=dict)
+    slot_correct_counts: dict = field(default_factory=dict)  # Track correct matches
     wrong_slots: set = field(default_factory=set)
+    correct_slots: set = field(default_factory=set)  # Slots confirmed as correct
     uncertain_slots: set = field(default_factory=set)
 
     # Last inference results
@@ -208,8 +210,8 @@ def is_speech_present(audio: np.ndarray, threshold: float = VAD_RMS_THRESHOLD) -
     """
     Check if speech is present in audio.
 
-    Computes RMS on a smaller recent window (VAD_WINDOW_MS) to avoid being
-    fooled by old audio in the buffer and to detect silence more quickly.
+    Uses simple RMS threshold for fast, responsive detection.
+    Lower threshold = more sensitive = earlier detection.
 
     Args:
         audio: Audio samples
@@ -218,7 +220,7 @@ def is_speech_present(audio: np.ndarray, threshold: float = VAD_RMS_THRESHOLD) -
     Returns:
         True if speech is likely present
     """
-    # Use only the last VAD_WINDOW_MS of audio for more responsive silence detection
+    # Use only the last VAD_WINDOW_MS of audio for responsive detection
     vad_samples = int(VAD_WINDOW_MS * SAMPLING_RATE / 1000)
     if len(audio) > vad_samples:
         recent_audio = audio[-vad_samples:]
@@ -227,19 +229,9 @@ def is_speech_present(audio: np.ndarray, threshold: float = VAD_RMS_THRESHOLD) -
 
     rms = compute_rms_energy(recent_audio)
 
-    # Also compute variation to detect constant noise vs actual speech
-    # Speech has more variation than constant background noise
-    if len(recent_audio) > 100:
-        # Compute RMS of chunks to detect variation
-        chunk_size = len(recent_audio) // 4
-        chunk_rms = [compute_rms_energy(recent_audio[i*chunk_size:(i+1)*chunk_size]) for i in range(4)]
-        rms_variation = max(chunk_rms) - min(chunk_rms)
-    else:
-        rms_variation = 0.0
-
-    # Speech if: RMS above threshold AND some variation (not constant noise)
-    # OR very high RMS (definitely speech even if constant)
-    is_speech = (rms > threshold and rms_variation > threshold * 0.3) or (rms > threshold * 2.0)
+    # Simple threshold check - no variation requirement for faster detection
+    # This makes the VAD more sensitive and triggers earlier in recitation
+    is_speech = rms > threshold
 
     # Log RMS periodically for debugging
     if hasattr(is_speech_present, '_log_counter'):
@@ -248,8 +240,7 @@ def is_speech_present(audio: np.ndarray, threshold: float = VAD_RMS_THRESHOLD) -
         is_speech_present._log_counter = 0
 
     if is_speech_present._log_counter % 10 == 0:  # Log every 10th call
-        logger.info(f"VAD: RMS={rms:.6f}, variation={rms_variation:.6f}, threshold={threshold}, "
-                   f"window_samples={len(recent_audio)}, speech_detected={is_speech}")
+        logger.info(f"VAD: RMS={rms:.6f}, threshold={threshold}, speech_detected={is_speech}")
 
     return is_speech
 
@@ -489,6 +480,51 @@ def score_against_ayah_prefix(
 # AYAH DETECTION
 # =============================================================================
 
+# Global cache for reference harakat (loaded once from audio analysis)
+_REFERENCE_HARAKAT_CACHE = None
+
+
+def load_reference_harakat() -> dict | None:
+    """
+    Load reference harakat sequences extracted from audio files.
+
+    The reference harakat represents the correct pronunciation as spoken
+    by a professional reciter. User recitations are compared against this.
+
+    Returns:
+        Dict mapping ayah index (str) to harakat data, or None if not found
+    """
+    global _REFERENCE_HARAKAT_CACHE
+
+    if _REFERENCE_HARAKAT_CACHE is not None:
+        return _REFERENCE_HARAKAT_CACHE
+
+    import json
+    from pathlib import Path
+
+    # Look for reference_harakat.json in audio folder
+    # Try multiple possible locations
+    possible_paths = [
+        Path(__file__).parent.parent.parent / "audio" / "reference_harakat.json",
+        Path(__file__).parent.parent.parent.parent / "audio" / "reference_harakat.json",
+    ]
+
+    for ref_path in possible_paths:
+        if ref_path.exists():
+            try:
+                with open(ref_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                _REFERENCE_HARAKAT_CACHE = data
+                logger.info(f"Loaded reference harakat from: {ref_path}")
+                logger.info(f"Reference contains {len(data.get('ayahs', {}))} ayahs from reciter: {data.get('reciter', 'unknown')}")
+                return data
+            except Exception as e:
+                logger.warning(f"Failed to load reference harakat from {ref_path}: {e}")
+
+    logger.warning("Reference harakat file not found - using text-derived harakat")
+    return None
+
+
 def get_expected_harakat_sequence_for_ayah(ayah_text: str) -> list:
     """
     Get the expected harakat sequence for an ayah.
@@ -503,17 +539,42 @@ def get_expected_harakat_sequence_for_ayah(ayah_text: str) -> list:
     return [s.harakat_class for s in slots if s.is_letter]
 
 
-def precompute_expected_harakat(ayat: list) -> dict:
+def precompute_expected_harakat(ayat: list, use_reference_audio: bool = True) -> dict:
     """
     Precompute expected harakat sequences for all ayat.
 
+    If reference audio harakat is available (from professional reciter recordings),
+    use that instead of text-derived harakat. This provides more accurate
+    comparison since it captures actual pronunciation variations.
+
     Args:
         ayat: List of ayah texts
+        use_reference_audio: If True, try to use reference audio harakat
 
     Returns:
         Dict mapping ayah index to expected harakat sequence
     """
     expected = {}
+
+    # Try to load reference harakat from audio analysis
+    if use_reference_audio:
+        ref_data = load_reference_harakat()
+        if ref_data and "ayahs" in ref_data:
+            logger.info("Using reference audio harakat for comparison")
+            for i, ayah in enumerate(ayat):
+                ayah_key = str(i)
+                if ayah_key in ref_data["ayahs"]:
+                    # Use harakat from reference audio
+                    expected[i] = ref_data["ayahs"][ayah_key]["harakat_sequence"]
+                    logger.info(f"  Ayah {i}: Using reference harakat (len={len(expected[i])})")
+                else:
+                    # Fallback to text-derived for missing ayahs
+                    expected[i] = get_expected_harakat_sequence_for_ayah(ayah)
+                    logger.info(f"  Ayah {i}: Using text-derived harakat (len={len(expected[i])})")
+            return expected
+
+    # Fallback: Use text-derived harakat
+    logger.info("Using text-derived harakat for comparison")
     for i, ayah in enumerate(ayat):
         expected[i] = get_expected_harakat_sequence_for_ayah(ayah)
     return expected
@@ -610,7 +671,9 @@ def update_detection_state(
                 # Initialize tracking state
                 session.cursor = 0
                 session.slot_error_counts.clear()
+                session.slot_correct_counts.clear()
                 session.wrong_slots.clear()
+                session.correct_slots.clear()
                 session.uncertain_slots.clear()
         return
 
@@ -647,8 +710,10 @@ def update_detection_state(
             session.low_score_streak = 0
             # Reset tracking state
             session.wrong_slots.clear()
+            session.correct_slots.clear()
             session.uncertain_slots.clear()
             session.slot_error_counts.clear()
+            session.slot_correct_counts.clear()
             return
     else:
         session.low_score_streak = 0  # Reset streak if score is good
@@ -677,7 +742,9 @@ def update_detection_state(
                 # Reset tracking state for new ayah
                 session.cursor = 0
                 session.slot_error_counts.clear()
+                session.slot_correct_counts.clear()
                 session.wrong_slots.clear()
+                session.correct_slots.clear()
                 session.uncertain_slots.clear()
         else:
             # Not beating by enough margin - reset streak
@@ -712,20 +779,23 @@ def compare_to_active_ayah(
         ayah_idx: Active ayah index
 
     Returns:
-        Set of slot indices in EXPECTED sequence that have mismatches
+        Tuple of (mismatches: Set, evaluated_slots: Set)
+        - mismatches: slot indices that have errors
+        - evaluated_slots: slot indices that were compared (for correct/wrong tracking)
     """
     if ayah_idx not in session.expected_harakat_by_ayah:
-        return set()
+        return set(), set()
 
     expected = session.expected_harakat_by_ayah[ayah_idx]
 
     if len(pred_seq) == 0 or len(expected) == 0:
-        return set()
+        return set(), set()
 
     # Align sequences using DP
     aligned_pred, aligned_exp = align_sequences(pred_seq, expected)
 
     mismatches = set()
+    evaluated_slots = set()  # Track which slots were actually compared
     exp_pos = -1  # Track position in original expected sequence
 
     for p, e in zip(aligned_pred, aligned_exp):
@@ -739,54 +809,67 @@ def compare_to_active_ayah(
 
         # Handle gaps in predicted (deletions - missing elements)
         if p == "__GAP__":
-            # Mark as uncertain rather than definitely wrong
-            # The user may not have reached this position yet
-            session.uncertain_slots.add(exp_pos)
+            # Don't mark anything - the user may not have reached this position yet
             continue
 
-        # Both have values - check if they match
+        # Both have values - this slot was evaluated
+        evaluated_slots.add(exp_pos)
+
+        # Check if they match
         if not is_harakat_similar(p, e):
             mismatches.add(exp_pos)
 
-    return mismatches
+    return mismatches, evaluated_slots
 
 
 def update_slot_errors(
     session: RealtimeHarakatSession,
     mismatches: set,
     num_slots: int,
+    evaluated_slots: set = None,
 ) -> None:
     """
-    Update slot error counts with persistence logic.
+    Update slot error and correct counts with persistence logic.
 
-    A slot is marked as wrong only after MISMATCH_PERSISTENCE consecutive
-    mismatches to avoid false positives from noise.
+    A slot is marked as wrong/correct after MISMATCH_PERSISTENCE consecutive
+    matches/mismatches to avoid false positives from noise.
 
     Args:
         session: The realtime session
         mismatches: Set of currently mismatched slot indices
         num_slots: Total number of slots in active ayah
+        evaluated_slots: Set of slot indices that were evaluated (matched in alignment)
     """
-    # Update error counts
+    if evaluated_slots is None:
+        evaluated_slots = set(range(num_slots))
+
+    # Update error and correct counts
     for i in range(num_slots):
+        if i not in evaluated_slots:
+            # Slot wasn't evaluated yet (user hasn't reached it)
+            continue
+
         if i in mismatches:
-            # Increment error count
+            # Increment error count, reset correct count
             session.slot_error_counts[i] = session.slot_error_counts.get(i, 0) + 1
+            session.slot_correct_counts[i] = 0
 
             # Mark as wrong if persistent
             if session.slot_error_counts[i] >= MISMATCH_PERSISTENCE:
                 session.wrong_slots.add(i)
-                session.uncertain_slots.discard(i)
-            elif session.slot_error_counts[i] == 1:
-                # First mismatch - mark as uncertain
-                session.uncertain_slots.add(i)
+                session.correct_slots.discard(i)
         else:
-            # Slot matches - decrement or clear error count
+            # Slot matches - increment correct count, decrement error count
+            session.slot_correct_counts[i] = session.slot_correct_counts.get(i, 0) + 1
             if i in session.slot_error_counts:
                 session.slot_error_counts[i] = max(0, session.slot_error_counts[i] - 1)
                 if session.slot_error_counts[i] == 0:
                     session.wrong_slots.discard(i)
-                    session.uncertain_slots.discard(i)
+
+            # Mark as correct if persistent
+            if session.slot_correct_counts[i] >= MISMATCH_PERSISTENCE:
+                session.correct_slots.add(i)
+                session.wrong_slots.discard(i)
 
 
 # =============================================================================
@@ -862,8 +945,10 @@ def infer_and_update(
             session.switch_streak = 0
             # Reset tracking state
             session.wrong_slots.clear()
+            session.correct_slots.clear()
             session.uncertain_slots.clear()
             session.slot_error_counts.clear()
+            session.slot_correct_counts.clear()
 
         # If silence is long enough, flush ring buffer (prevents old audio drag)
         if silence_duration >= SILENCE_FLUSH_SEC:
@@ -876,7 +961,7 @@ def infer_and_update(
             'is_detecting': session.mode == Mode.DETECT,
             'detection_confidence': session.detection_confidence,
             'wrong_slots': session.wrong_slots.copy(),
-            'uncertain_slots': session.uncertain_slots.copy(),
+            'correct_slots': session.correct_slots.copy(),
             'has_speech': False,
             'mode': str(session.mode.value),
             'silence_sec': round(silence_duration, 2),
@@ -927,7 +1012,7 @@ def infer_and_update(
 
     # Run tracking if locked on an ayah
     if session.mode == Mode.TRACK and session.active_ayah_idx is not None:
-        mismatches = compare_to_active_ayah(
+        mismatches, evaluated_slots = compare_to_active_ayah(
             session,
             pred_harakat_seq,
             session.active_ayah_idx,
@@ -936,8 +1021,8 @@ def infer_and_update(
         # Get number of slots for active ayah
         num_slots = len(session.expected_harakat_by_ayah.get(session.active_ayah_idx, []))
 
-        # Update error tracking
-        update_slot_errors(session, mismatches, num_slots)
+        # Update error and correct tracking
+        update_slot_errors(session, mismatches, num_slots, evaluated_slots)
 
     # Get current ayah score for debugging
     cur_score = scores_by_ayah.get(session.active_ayah_idx, 0.0) if session.active_ayah_idx is not None else 0.0
@@ -947,7 +1032,7 @@ def infer_and_update(
         'is_detecting': session.mode == Mode.DETECT,
         'detection_confidence': session.detection_confidence,
         'wrong_slots': session.wrong_slots.copy(),
-        'uncertain_slots': session.uncertain_slots.copy(),
+        'correct_slots': session.correct_slots.copy(),  # Add correct slots
         'has_speech': True,
         'pred_harakat_seq': pred_harakat_seq,
         'best_score': best_score,
@@ -1004,7 +1089,9 @@ def reset_session(session: RealtimeHarakatSession) -> None:
     session.last_voice_ts = 0.0
     session.cursor = 0
     session.slot_error_counts.clear()
+    session.slot_correct_counts.clear()
     session.wrong_slots.clear()
+    session.correct_slots.clear()
     session.uncertain_slots.clear()
     session.last_pred_harakat_seq = []
     session.last_score_by_ayah = {}

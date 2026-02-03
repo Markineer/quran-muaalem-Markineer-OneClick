@@ -489,22 +489,32 @@ async def websocket_realtime(websocket: WebSocket):
                                 "switch_streak": switch_streak,
                             })
 
-                            # Get hints for wrong slots
-                            hints = get_hint_map_for_active(session.session, FATIHA_AYAT)
-
-                            # Send tracking info
-                            await websocket.send_json({
-                                "type": "tracking",
-                                "wrong_slots": list(result.get("wrong_slots", set())),
-                                "uncertain_slots": list(result.get("uncertain_slots", set())),
-                                "hints": hints,
-                            })
-
                             new_status = "detected"
                         elif has_speech:
                             new_status = "detecting"
                         else:
                             new_status = "waiting"
+
+                        # Send tracking info whenever we have an active ayah (not just on first detection)
+                        if result.get("active_ayah_idx") is not None:
+                            # Get hints for wrong slots
+                            hints = get_hint_map_for_active(session.session, FATIHA_AYAT)
+
+                            wrong_slots_list = list(result.get("wrong_slots", set()))
+                            correct_slots_list = list(result.get("correct_slots", set()))
+
+                            # Debug logging
+                            logger.info(f"TRACKING UPDATE: ayah={result.get('active_ayah_idx')}, wrong={len(wrong_slots_list)} slots, correct={len(correct_slots_list)} slots")
+                            logger.info(f"  wrong_slots: {wrong_slots_list[:10] if len(wrong_slots_list) > 10 else wrong_slots_list}")
+                            logger.info(f"  correct_slots: {correct_slots_list[:10] if len(correct_slots_list) > 10 else correct_slots_list}")
+
+                            # Send tracking info with current harakat state
+                            await websocket.send_json({
+                                "type": "tracking",
+                                "wrong_slots": wrong_slots_list,
+                                "correct_slots": correct_slots_list,
+                                "hints": hints,
+                            })
 
                         # Always send status with detection confidence for debugging
                         await websocket.send_json({

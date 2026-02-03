@@ -57,7 +57,7 @@ export default function HarakatTrainer({ settings }) {
       // For demo, show mock results
       setResults({
         html: generateMockResults(),
-        stats: { correct: 85, wrong: 3, uncertain: 2 }
+        stats: { correct: 85, wrong: 5 }
       })
     } finally {
       setIsAnalyzing(false)
@@ -233,12 +233,6 @@ export default function HarakatTrainer({ settings }) {
                     color="crimson"
                     icon={AlertCircle}
                   />
-                  <StatBox
-                    label="غير متأكد"
-                    value={results.stats.uncertain}
-                    color="amber"
-                    icon={AlertCircle}
-                  />
                 </div>
               )}
 
@@ -257,10 +251,6 @@ export default function HarakatTrainer({ settings }) {
                 <div className="legend-item">
                   <div className="legend-dot wrong" />
                   <span>خطأ في الحركة</span>
-                </div>
-                <div className="legend-item">
-                  <div className="legend-dot uncertain" />
-                  <span>غير متأكد</span>
                 </div>
               </div>
             </motion.div>
@@ -298,7 +288,7 @@ function generateMockResults() {
       <span> </span>
       <span>ٱلرَّحْمَـٰنِ</span>
       <span> </span>
-      <span class="harakat-uncertain" data-hint="غير متأكد">ٱلرَّحِيمِ</span>
+      <span class="harakat-wrong" data-hint="المتوقع: كسرة | المقروء: ضمة">ٱلرَّحِيمِ</span>
     </p>
   `
 }

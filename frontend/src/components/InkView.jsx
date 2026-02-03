@@ -15,7 +15,7 @@ export default function InkView({
   ayat = [],
   activeAyahIdx = null,
   wrongSlots = new Set(),
-  uncertainSlots = new Set(),
+  correctSlots = new Set(),
   hints = {},
   status = 'waiting',
 }) {
@@ -48,7 +48,7 @@ export default function InkView({
             ayahNum={idx + 1}
             isActive={idx === activeAyahIdx}
             wrongSlots={idx === activeAyahIdx ? wrongSlots : new Set()}
-            uncertainSlots={idx === activeAyahIdx ? uncertainSlots : new Set()}
+            correctSlots={idx === activeAyahIdx ? correctSlots : new Set()}
             hints={idx === activeAyahIdx ? hints : {}}
           />
         ))}
@@ -75,7 +75,7 @@ export default function InkView({
   )
 }
 
-function AyahRow({ text, ayahNum, isActive, wrongSlots, uncertainSlots, hints }) {
+function AyahRow({ text, ayahNum, isActive, wrongSlots, correctSlots, hints }) {
   const arabicNums = '٠١٢٣٤٥٦٧٨٩'
   const toArabicNum = (n) => n.toString().split('').map(d => arabicNums[parseInt(d)]).join('')
 
@@ -101,7 +101,7 @@ function AyahRow({ text, ayahNum, isActive, wrongSlots, uncertainSlots, hints })
           <HighlightedText
             text={text}
             wrongSlots={wrongSlots}
-            uncertainSlots={uncertainSlots}
+            correctSlots={correctSlots}
             hints={hints}
           />
         ) : (
@@ -125,7 +125,7 @@ function AyahRow({ text, ayahNum, isActive, wrongSlots, uncertainSlots, hints })
   )
 }
 
-function HighlightedText({ text, wrongSlots, uncertainSlots, hints }) {
+function HighlightedText({ text, wrongSlots, correctSlots, hints }) {
   // Parse the text into letter slots
   // This is a simplified version - the actual implementation uses the harakat_mode module
   const slots = parseTextToSlots(text)
@@ -139,12 +139,12 @@ function HighlightedText({ text, wrongSlots, uncertainSlots, hints }) {
   return (
     <>
       {slots.map((slot, idx) => {
-        // Find if this slot corresponds to a wrong/uncertain letter
+        // Find if this slot corresponds to a letter
         const letterInfo = letterSlotIndices.find(ls => ls.idx === idx)
         const letterIdx = letterInfo?.letterIdx
 
         const isWrong = letterIdx !== undefined && wrongSlots.has(letterIdx)
-        const isUncertain = letterIdx !== undefined && uncertainSlots.has(letterIdx)
+        const isCorrect = letterIdx !== undefined && correctSlots.has(letterIdx)
         const hint = letterIdx !== undefined ? hints[letterIdx] : null
 
         if (isWrong) {
@@ -160,19 +160,19 @@ function HighlightedText({ text, wrongSlots, uncertainSlots, hints }) {
           )
         }
 
-        if (isUncertain) {
+        if (isCorrect) {
           return (
             <span
               key={idx}
-              className="harakat-uncertain"
-              data-hint={hint || 'غير متأكد'}
-              title={hint || 'غير متأكد'}
+              className="harakat-correct"
+              title="صحيح"
             >
               {slot.text}
             </span>
           )
         }
 
+        // Not yet evaluated
         return <span key={idx}>{slot.text}</span>
       })}
     </>

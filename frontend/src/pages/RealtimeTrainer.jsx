@@ -21,7 +21,7 @@ export default function RealtimeTrainer({ settings }) {
   const [activeAyahIdx, setActiveAyahIdx] = useState(null)
   const [confidence, setConfidence] = useState(0)
   const [wrongSlots, setWrongSlots] = useState(new Set())
-  const [uncertainSlots, setUncertainSlots] = useState(new Set())
+  const [correctSlots, setCorrectSlots] = useState(new Set())
   const [hints, setHints] = useState({})
   const [audioLevel, setAudioLevel] = useState(0)
   const [error, setError] = useState(null)
@@ -138,14 +138,13 @@ export default function RealtimeTrainer({ settings }) {
       setConfidence(0.87)
     }, 3000)
 
-    // Simulate some errors after 5 seconds
+    // Simulate some errors after 5 seconds (binary feedback: correct or wrong)
     setTimeout(() => {
-      setWrongSlots(new Set([3, 8]))
-      setUncertainSlots(new Set([12]))
+      setWrongSlots(new Set([3, 8, 12]))
       setHints({
         3: 'المتوقع: كسرة | المقروء: فتحة',
         8: 'المتوقع: ضمة | المقروء: سكون',
-        12: 'غير متأكد',
+        12: 'المتوقع: فتحة | المقروء: ضمة',
       })
     }, 5000)
 
@@ -154,7 +153,6 @@ export default function RealtimeTrainer({ settings }) {
       setActiveAyahIdx(1)
       setConfidence(0.92)
       setWrongSlots(new Set([2]))
-      setUncertainSlots(new Set())
       setHints({
         2: 'المتوقع: فتحة | المقروء: كسرة',
       })
@@ -317,7 +315,7 @@ export default function RealtimeTrainer({ settings }) {
 
       case 'tracking':
         setWrongSlots(new Set(data.wrong_slots || []))
-        setUncertainSlots(new Set(data.uncertain_slots || []))
+        setCorrectSlots(new Set(data.correct_slots || []))
         setHints(data.hints || {})
         break
 
@@ -370,7 +368,7 @@ export default function RealtimeTrainer({ settings }) {
     setActiveAyahIdx(null)
     setConfidence(0)
     setWrongSlots(new Set())
-    setUncertainSlots(new Set())
+    setCorrectSlots(new Set())
     setHints({})
     setError(null)
   }
@@ -482,7 +480,7 @@ export default function RealtimeTrainer({ settings }) {
           ayat={FATIHA_AYAT}
           activeAyahIdx={activeAyahIdx}
           wrongSlots={wrongSlots}
-          uncertainSlots={uncertainSlots}
+          correctSlots={correctSlots}
           hints={hints}
           status={status}
         />
@@ -496,10 +494,6 @@ export default function RealtimeTrainer({ settings }) {
           <div className="legend-item">
             <div className="legend-dot wrong" />
             <span>خطأ في الحركة</span>
-          </div>
-          <div className="legend-item">
-            <div className="legend-dot uncertain" />
-            <span>غير متأكد</span>
           </div>
           <div className="legend-item">
             <div className="legend-dot inkless" />

@@ -531,13 +531,6 @@ def render_ayah_with_highlights(
             html_parts.append(
                 f'<span class="harakat-wrong" title="{tooltip}">{escaped_original}</span>'
             )
-        elif idx in uncertain_slot_idxs:
-            # Uncertain - yellow highlight
-            tooltip = hint_map.get(idx, "غير متأكد")
-            escaped_original = original.replace('"', '&quot;')
-            html_parts.append(
-                f'<span class="harakat-uncertain" title="{tooltip}">{escaped_original}</span>'
-            )
         else:
             # Correct - no highlight
             html_parts.append(original)
